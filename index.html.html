@@ -1,0 +1,2305 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>香港急救學模擬個案生成器 | First Aid Training Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+        .vital-card {
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .vital-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        @media print {
+            body {
+                background-color: #ffffff !important;
+                color: #000000 !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-full {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+            }
+            .print-break-avoid {
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- 頂部導航列 -->
+    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-30 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-red-600 p-2 rounded-xl shadow-inner flex items-center justify-center">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-black tracking-tight flex items-center gap-2">
+                        香港急救學模擬個案生成器
+                        <span class="hidden sm:inline-block text-xs font-semibold bg-slate-800 text-teal-400 border border-slate-700 px-2.5 py-0.5 rounded-full">導師專用實習系統</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">支援香港急救標準（DRSABCD • 創傷機轉 • 生命表徵動態模擬）</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="toggleTimerVisibility()" id="btnHeaderTimer" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+                    <span>⏱️</span>
+                    <span id="headerTimerStatus">計時系統：關閉</span>
+                </button>
+                <button onclick="openReferenceModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+                    <span>📚</span>
+                    <span>急救對照總表</span>
+                </button>
+                <button onclick="toggleHistoryDrawer()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+                    <span>🗂️</span>
+                    <span>歷史個案 (<span id="historyCount">0</span>)</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 提示訊息框 (取代 alert) -->
+    <div id="toastMessage" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none no-print">
+        <div class="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-2.5 text-sm font-medium">
+            <span id="toastIcon">✅</span>
+            <span id="toastText">操作成功</span>
+        </div>
+    </div>
+
+    <!-- 主內容區 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- 可選式實操計時系統面板 (預設隱藏，可從頂部按鈕開啟) -->
+        <section id="timerPanel" class="hidden bg-slate-900 text-white rounded-2xl shadow-md border border-slate-700 p-4 sm:p-5 no-print transition-all">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <!-- 左側：計時器模式切換與時間顯示 -->
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">⏱️</span>
+                        <div>
+                            <div class="text-xs font-bold text-teal-400 uppercase tracking-wider">實操模擬計時器</div>
+                            <div class="flex items-center gap-1.5 mt-1">
+                                <button onclick="setTimerMode('COUNTDOWN')" id="modeCountdownBtn" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-teal-500 text-slate-950 transition">倒數計時</button>
+                                <button onclick="setTimerMode('STOPWATCH')" id="modeStopwatchBtn" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">正計時 (碼錶)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 大型數字顯示屏 -->
+                    <div id="timerDisplayBox" class="bg-slate-950 border border-slate-700 px-5 py-2.5 rounded-xl flex items-baseline gap-2 shadow-inner">
+                        <span id="timerDisplay" class="text-3xl sm:text-4xl font-black font-mono tracking-wider text-teal-400">05:00</span>
+                        <span id="timerStateBadge" class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400">待機中</span>
+                    </div>
+                </div>
+
+                <!-- 中間：倒數預設時間按鈕 (僅倒數模式顯示) -->
+                <div id="countdownPresets" class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-xs text-slate-400 font-semibold mr-1">預設時限：</span>
+                    <button onclick="setCountdownMinutes(3)" class="text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-700">3 分鐘</button>
+                    <button onclick="setCountdownMinutes(5)" class="text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-700">5 分鐘</button>
+                    <button onclick="setCountdownMinutes(8)" class="text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-700">8 分鐘</button>
+                    <button onclick="setCountdownMinutes(10)" class="text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-700">10 分鐘</button>
+                    <div class="flex items-center gap-1 ml-1">
+                        <input type="number" id="customMinutesInput" min="1" max="60" placeholder="自訂" class="w-16 bg-slate-800 border border-slate-600 text-white text-xs font-bold rounded-lg px-2 py-1.5 text-center focus:outline-none focus:border-teal-400">
+                        <button onclick="applyCustomMinutes()" class="text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-2.5 py-1.5 rounded-lg">設定</button>
+                    </div>
+                </div>
+
+                <!-- 右側：控制按鈕 -->
+                <div class="flex items-center gap-2">
+                    <button onclick="startPauseTimer()" id="btnTimerStartPause" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                        <span>▶️</span>
+                        <span>開始計時</span>
+                    </button>
+                    <button onclick="resetTimer()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border border-slate-700 transition flex items-center gap-1">
+                        <span>🔄</span>
+                        <span>重設</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 導師控制面板 -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 no-print">
+            <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-grow">
+                    <!-- 難度級別 (置於首位，方便導師先定級別) -->
+                    <div>
+                        <label for="filterDifficulty" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">1. 模擬難度級別</label>
+                        <select id="filterDifficulty" onchange="onDifficultyChange()" class="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm font-semibold rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 p-2.5">
+                            <option value="SIMPLE">🟢 簡單級別（基礎包紮與固定）</option>
+                            <option value="BASIC">🟡 標準級別（典型創傷與內科急症）</option>
+                            <option value="ADVANCED">🔴 進階級別（複合傷勢 / 隱匿休克）</option>
+                            <option value="RANDOM">🎲 隨機難度（標準 / 進階）</option>
+                        </select>
+                    </div>
+
+                    <!-- 個案類型 -->
+                    <div>
+                        <label for="filterMode" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">2. 個案類別篩選</label>
+                        <select id="filterMode" onchange="updateConditionDropdown()" class="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm font-semibold rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 p-2.5">
+                            <option value="ALL">全部隨機 (創傷 + 內科/環境)</option>
+                            <option value="TRAUMA">創傷個案 (受傷機制與部位)</option>
+                            <option value="MEDICAL">內科及環境急症 (24種臨床狀況)</option>
+                        </select>
+                    </div>
+
+                    <!-- 指定特定狀況 -->
+                    <div>
+                        <label for="filterCondition" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">3. 指定考題主題 (可選)</label>
+                        <select id="filterCondition" class="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm font-semibold rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 p-2.5">
+                            <option value="RANDOM">🎲 隨機抽取任何傷病狀況</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 主要操作按鈕 -->
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5 pt-2 lg:pt-0">
+                    <button onclick="generateNewCase()" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-sm sm:text-base px-6 py-3 rounded-xl shadow-md shadow-red-600/20 transition flex items-center justify-center gap-2">
+                        <span>🎲</span>
+                        <span>生成新模擬個案</span>
+                    </button>
+                    <button onclick="copyCaseToClipboard()" title="複製個案文字給學員" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm px-4 py-3 rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                        <span>📋</span>
+                        <span class="hidden sm:inline">複製文字</span>
+                    </button>
+                    <button onclick="window.print()" title="列印情景卡" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm px-4 py-3 rounded-xl border border-slate-300 transition flex items-center justify-center gap-1.5">
+                        <span>🖨️</span>
+                        <span class="hidden sm:inline">列印</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 個案展示區 (學員視角) -->
+        <div id="caseContainer" class="space-y-6 print-full">
+            
+            <!-- 個案標頭資訊卡 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print-break-avoid">
+                <div class="bg-slate-800 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-3">
+                        <span id="caseBadgeNumber" class="bg-teal-500 text-slate-950 font-black text-xs px-2.5 py-1 rounded-lg">個案 #01</span>
+                        <span id="caseCategoryTag" class="text-xs font-semibold bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg">內科 / 環境急症</span>
+                        <span id="caseDifficultyTag" class="text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg">基礎級別</span>
+                    </div>
+                    <div class="text-xs text-slate-400 font-medium" id="caseTimestamp">
+                        模擬時間：實時生成
+                    </div>
+                </div>
+
+                <!-- 傷病者基本資料 & 環境天氣 -->
+                <div class="p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    <!-- 左側：傷病者檔案 (4欄) -->
+                    <div class="lg:col-span-4 bg-slate-50 rounded-xl p-4 border border-slate-200/80 flex flex-col justify-between">
+                        <div>
+                            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <span>👤</span> 傷病者基本資料
+                            </div>
+                            <div class="flex items-center gap-4 mb-4">
+                                <div id="patientAvatar" class="w-14 h-14 rounded-2xl bg-slate-200 flex items-center justify-center text-3xl shadow-inner">
+                                    🧑
+                                </div>
+                                <div>
+                                    <div class="text-2xl font-black text-slate-900" id="patientDemographics">男性，45 歲</div>
+                                    <div class="text-xs font-semibold text-slate-500 mt-0.5" id="patientAgeGroup">成年人（適用成人急救標準）</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pt-3 border-t border-slate-200 text-xs text-slate-600 space-y-1">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">體型/外觀：</span>
+                                <span class="font-semibold text-slate-800" id="patientBuild">中等身材，穿著日常便服</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">同行者情況：</span>
+                                <span class="font-semibold text-slate-800" id="patientCompanion">有同事/途人在場目擊</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右側：現場環境及天氣 (8欄) -->
+                    <div class="lg:col-span-8 bg-sky-50/60 rounded-xl p-4 border border-sky-200/80 flex flex-col justify-between">
+                        <div>
+                            <div class="text-xs font-bold text-sky-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <span>🌦️</span> 現場環境及天氣狀況（請先評估現場安全）
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                <div class="bg-white p-3 rounded-xl border border-sky-100 shadow-xs">
+                                    <div class="text-xs text-slate-400 font-semibold">📍 事發地點與環境</div>
+                                    <div class="text-sm sm:text-base font-bold text-slate-900 mt-1" id="sceneLocation">九龍觀塘區某建築地盤露天平台</div>
+                                </div>
+                                <div class="bg-white p-3 rounded-xl border border-sky-100 shadow-xs">
+                                    <div class="text-xs text-slate-400 font-semibold">🌡️ 天氣與氣溫濕度</div>
+                                    <div class="text-sm sm:text-base font-bold text-slate-900 mt-1" id="sceneWeather">酷熱天氣警告生效，氣溫 34°C，相對濕度 85%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white/80 px-3.5 py-2.5 rounded-xl border border-sky-100 text-xs sm:text-sm text-slate-700 flex items-start gap-2">
+                            <span class="text-amber-500 font-bold">⚠️ 環境提示：</span>
+                            <span id="sceneHazard">現場無明顯交通危險，但陽光猛烈、地面溫度高，需留意自身及傷者防暑與安全。</span>
+                        </div>
+                    </div>
+
+                    <!-- 受傷機制 / 病發經過 (全寬 12欄) -->
+                    <div class="lg:col-span-12 bg-amber-50/70 rounded-xl p-4 sm:p-5 border border-amber-200/90">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <span class="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <span>💥</span> 受傷機制 (MOI) / 現場目擊經過
+                            </span>
+                            <span id="moiTag" class="text-xs font-bold bg-amber-200/80 text-amber-950 px-2.5 py-0.5 rounded-md">
+                                機制分類：環境熱力影響
+                            </span>
+                        </div>
+                        <p id="scenarioNarrative" class="text-base sm:text-lg font-medium text-slate-900 leading-relaxed">
+                            傷病者在烈日下連續進行戶外搬運工作約 2 小時，期間較少飲水。剛才突然感到頭暈目眩、劇烈頭痛及噁心，隨後步伐不穩跌坐地上。你到場時發現其皮膚異常乾熱潮紅，並無出汗。
+                        </p>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- 生命表徵儀表板 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 print-break-avoid">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-900 flex items-center gap-2">
+                            <span class="text-red-600">🩺</span> 初步檢查與生命表徵 (Vital Signs)
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">學員需根據以下臨床數據判斷傷病嚴重程度及休克風險</p>
+                    </div>
+                    <button onclick="toggleReferenceHints()" id="btnToggleHints" class="no-print text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl border border-slate-300 transition flex items-center gap-1.5">
+                        <span>👁️</span>
+                        <span id="hintBtnText">顯示正常成人參考值</span>
+                    </button>
+                </div>
+
+                <!-- 正常參考值提示條 (預設隱藏，可切換) -->
+                <div id="normalRefBanner" class="hidden mb-5 bg-teal-50 border border-teal-200 rounded-xl p-3.5 text-xs text-teal-900 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                        <span class="font-bold block text-teal-700">正常成人脈搏 (Pulse)</span>
+                        <span>60 – 100 次/分鐘</span>
+                    </div>
+                    <div>
+                        <span class="font-bold block text-teal-700">正常成人呼吸 (Resp)</span>
+                        <span>12 – 20 次/分鐘</span>
+                    </div>
+                    <div>
+                        <span class="font-bold block text-teal-700">正常成人血壓 (BP)</span>
+                        <span>90-120 / 60-80 mmHg</span>
+                    </div>
+                    <div>
+                        <span class="font-bold block text-teal-700">正常血含氧量 (SpO₂)</span>
+                        <span>≥ 95%</span>
+                    </div>
+                </div>
+
+                <!-- 六大生命表徵卡片網格 -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    
+                    <!-- 1. 清醒程度 AVPU -->
+                    <div class="vital-card bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-500 uppercase">清醒程度 (AVPU)</span>
+                            <span class="text-lg">🧠</span>
+                        </div>
+                        <div id="vitalAVPU" class="text-lg sm:text-xl font-black text-slate-900">V – 對聲音有反應</div>
+                        <div id="vitalAVPUDesc" class="text-xs font-medium text-slate-600 mt-1">神志迷糊、言語含糊不清</div>
+                    </div>
+
+                    <!-- 2. 脈搏 Pulse -->
+                    <div class="vital-card bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-500 uppercase">脈搏速率與質素 (Pulse)</span>
+                            <span class="text-lg">💓</span>
+                        </div>
+                        <div id="vitalPulse" class="text-lg sm:text-xl font-black text-red-600">132 次/分鐘</div>
+                        <div id="vitalPulseDesc" class="text-xs font-medium text-slate-600 mt-1">顯著加快、強而有力（後期轉微弱）</div>
+                    </div>
+
+                    <!-- 3. 呼吸頻率 Respiration -->
+                    <div class="vital-card bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-500 uppercase">呼吸頻率與深度 (Resp)</span>
+                            <span class="text-lg">🫁</span>
+                        </div>
+                        <div id="vitalResp" class="text-lg sm:text-xl font-black text-slate-900">26 次/分鐘</div>
+                        <div id="vitalRespDesc" class="text-xs font-medium text-slate-600 mt-1">呼吸急促且較淺</div>
+                    </div>
+
+                    <!-- 4. 血壓 Blood Pressure -->
+                    <div class="vital-card bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-500 uppercase">血壓 (Blood Pressure)</span>
+                            <span class="text-lg">🩸</span>
+                        </div>
+                        <div id="vitalBP" class="text-lg sm:text-xl font-black text-slate-900">94 / 58 mmHg</div>
+                        <div id="vitalBPDesc" class="text-xs font-medium text-slate-600 mt-1">偏低（有進入休克風險）</div>
+                    </div>
+
+                    <!-- 5. 血含氧量 SpO2 -->
+                    <div class="vital-card bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-500 uppercase">血含氧量 (SpO₂)</span>
+                            <span class="text-lg">🫧</span>
+                        </div>
+                        <div id="vitalSpO2" class="text-lg sm:text-xl font-black text-slate-900">95%</div>
+                        <div id="vitalSpO2Desc" class="text-xs font-medium text-slate-600 mt-1">處於正常下限</div>
+                    </div>
+
+                    <!-- 6. 體溫、皮膚及瞳孔 -->
+                    <div class="vital-card bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-500 uppercase">體溫、皮膚與瞳孔</span>
+                            <span class="text-lg">🌡️</span>
+                        </div>
+                        <div id="vitalSkinTemp" class="text-base sm:text-lg font-black text-red-600">40.8°C｜皮膚乾熱潮紅</div>
+                        <div id="vitalPupils" class="text-xs font-medium text-slate-600 mt-1">瞳孔：雙側等大圓形，對光有反應</div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- 導師專用答案與評核區 (預設折疊隱藏，方便投屏考問學員) -->
+            <section class="bg-slate-900 text-white rounded-2xl shadow-md overflow-hidden print-break-avoid">
+                <div class="p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 bg-slate-800/90 border-b border-slate-700">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-xl">🎓</span>
+                        <div>
+                            <h3 class="text-base font-bold text-white">導師專用：標準診斷、急救重點及評核表</h3>
+                            <p class="text-xs text-slate-400">向學員展示題目時建議保持隱藏，待實習完成後展開檢討</p>
+                        </div>
+                    </div>
+                    <button onclick="toggleInstructorPanel()" id="btnToggleAnswer" class="no-print bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+                        <span id="answerEyeIcon">👁️‍🗨️</span>
+                        <span id="answerBtnText">顯示導師答案與評核</span>
+                    </button>
+                </div>
+
+                <div id="instructorAnswerBody" class="hidden p-5 sm:p-6 space-y-6">
+                    <!-- 標準診斷 & 急救重點 -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                        <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700">
+                            <div class="text-xs font-bold text-teal-400 uppercase tracking-wider mb-1.5">🎯 預期診斷 / 傷勢判斷</div>
+                            <div id="ansDiagnosis" class="text-lg sm:text-xl font-black text-white mb-2">中暑 (Heatstroke)</div>
+                            <div id="ansAnatomy" class="text-xs text-slate-300 bg-slate-900/70 p-2.5 rounded-lg border border-slate-700/80">
+                                涉及系統：中樞神經及體溫調節中樞衰竭（屬於嚴重環境熱力急症）
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-800/80 rounded-xl p-4 border border-slate-700">
+                            <div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-1.5">🚑 臨床評估與急救處置重點</div>
+                            <p id="ansTreatment" class="text-sm text-slate-200 leading-relaxed">
+                                1. 立即將傷者移至陰涼通風處，解開緊身衣物。<br>
+                                2. 迅速降溫（首要任務）：用濕涼毛巾抹身、扇風、在頸部/腋下/腹股溝放置冰袋，目標將體溫降至約 38°C。<br>
+                                3. 切勿強行餵水（因神志不清有窒息風險）；若清醒則可小口補充清涼飲品。<br>
+                                4. 立即致電 999 召喚救護車，持續監察清醒程度及呼吸脈搏，準備隨時施行心肺復甦法 (CPR)。
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 導師實時觀察評核表 -->
+                    <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">📋 學員實操評核核對表 (Instructor Live Checklist)</span>
+                            <div class="flex items-center gap-2">
+                                <span id="assessmentElapsedBadge" class="text-xs font-bold bg-slate-700 text-amber-300 px-2.5 py-1 rounded-md">⏱️ 實操耗時：未啟用計時</span>
+                                <span id="checklistScore" class="text-xs font-bold bg-slate-700 text-teal-300 px-2.5 py-1 rounded-md">已完成：0 / 5 項</span>
+                            </div>
+                        </div>
+                        <div id="checklistItems" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-sm">
+                            <!-- 動態生成評核項目 -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- 頁尾 -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-8 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+            <div>香港急救學教學輔助工具 • 僅供急救課程模擬訓練及情景演練使用</div>
+            <div>資料基準：《香港急救學獨立分類總表》及《急救診斷與生命表徵對照表》</div>
+        </div>
+    </footer>
+
+    <!-- 歷史個案側邊抽屜 -->
+    <div id="historyDrawer" class="fixed inset-0 z-40 hidden no-print">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="toggleHistoryDrawer()"></div>
+        <div class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-2xl flex flex-col">
+            <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+                <h3 class="font-bold text-base flex items-center gap-2">
+                    <span>🗂️</span> 本次課堂已生成個案紀錄
+                </h3>
+                <button onclick="toggleHistoryDrawer()" class="text-slate-400 hover:text-white p-1 rounded-lg">✕</button>
+            </div>
+            <div id="historyList" class="flex-grow overflow-y-auto p-4 space-y-2.5">
+                <div class="text-center text-slate-400 text-sm py-10">暫無歷史紀錄</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 急救對照總表查閱 Modal -->
+    <div id="referenceModal" class="fixed inset-0 z-50 hidden no-print">
+        <div class="absolute inset-0 bg-slate-900/70 backdrop-blur-xs" onclick="closeReferenceModal()"></div>
+        <div class="relative max-w-6xl mx-auto my-6 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] mx-4 sm:mx-auto">
+            <div class="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-base sm:text-lg">📚 香港急救學分類與生命表徵對照總表</h3>
+                    <p class="text-xs text-slate-400">導師備課及學員檢討參考資料庫</p>
+                </div>
+                <button onclick="closeReferenceModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-sm font-bold">關閉 ✕</button>
+            </div>
+            
+            <!-- 分頁標籤 -->
+            <div class="flex border-b border-slate-200 bg-slate-50 px-4 pt-2 gap-2 overflow-x-auto">
+                <button onclick="switchRefTab('vitals')" id="tabVitals" class="px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 border-teal-600 text-teal-700 whitespace-nowrap">
+                    🩺 急救診斷與生命表徵對照表 (24項)
+                </button>
+                <button onclick="switchRefTab('moi')" id="tabMoi" class="px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap">
+                    💥 受傷機制分類表 (11項)
+                </button>
+                <button onclick="switchRefTab('anatomy')" id="tabAnatomy" class="px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap">
+                    🦴 人體部位與構造表 (4大區)
+                </button>
+            </div>
+
+            <!-- 表格內容區 -->
+            <div id="refModalContent" class="p-4 sm:p-6 overflow-y-auto flex-grow text-sm">
+                <!-- 動態載入表格 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. 核心資料庫：完整收錄《香港急救學獨立分類總表》與《急救診斷與生命表徵對照表》
+        // =========================================================================
+
+        // 表一：人體主要部位與詳細解剖構造
+        const ANATOMY_DATA = [
+            {
+                region: "頭面部",
+                parts: [
+                    { name: "顱骨與頭皮", detail: "頭皮、前額、頂骨、顳骨、枕骨" },
+                    { name: "眼部", detail: "眼眶、眼球、眼瞼、結膜、角膜" },
+                    { name: "耳與鼻", detail: "外耳廓、外耳道、鼻骨、鼻腔" },
+                    { name: "口腔與下頜", detail: "嘴唇、牙齒、舌頭、上頜骨、下頜骨（下巴）" }
+                ]
+            },
+            {
+                region: "頸部與軀幹",
+                parts: [
+                    { name: "頸部", detail: "頸椎、氣管、頸動脈、喉部" },
+                    { name: "胸部", detail: "鎖骨、胸骨、肋骨、心臟、肺部" },
+                    { name: "腹部", detail: "上腹部（胃、肝、脾）、下腹部（腸道、膀胱）" },
+                    { name: "背部與脊椎", detail: "胸椎、腰椎、骶椎、尾椎、脊髓" },
+                    { name: "骨盆與會陰", detail: "髖骨（髂骨、坐骨、恥骨）、腹股溝、生殖器" }
+                ]
+            },
+            {
+                region: "上肢部位",
+                parts: [
+                    { name: "肩部", detail: "肩胛骨、肩關節（盂肱關節）、肩峰" },
+                    { name: "上臂與肘部", detail: "肱骨、肱二頭肌/三頭肌、肘關節" },
+                    { name: "前臂與腕部", detail: "橈骨、尺骨、腕關節" },
+                    { name: "手部", detail: "掌骨、指骨（拇指至小指）、指甲床" }
+                ]
+            },
+            {
+                region: "下肢部位",
+                parts: [
+                    { name: "大腿與膝部", detail: "股骨、股四頭肌、膕繩肌、膝關節、髕骨（膝蓋骨）" },
+                    { name: "小腿", detail: "脛骨、腓骨、小腿三頭肌（腓腸肌）" },
+                    { name: "踝部與足部", detail: "內外踝、跟骨（腳跟）、跗骨、蹠骨、趾骨" }
+                ]
+            }
+        ];
+
+        // 表二：受傷機制 (Mechanism of Injury - MOI) 分類與創傷情景模板
+        const MOI_DATA = [
+            {
+                id: "MOI_01",
+                type: "直接暴力 (Direct Force)",
+                desc: "外力直接撞擊身體某一部位，傷勢通常發生在受力點（如被重物擊中、跌倒時直接撞擊地面）。",
+                injuries: "局部挫傷、裂傷、閉合性/開放性骨折",
+                ageRange: [18, 65],
+                scenes: [
+                    { loc: "九龍灣工業大廈貨倉", weather: "室內通風環境，氣溫 26°C", hazard: "貨架仍有不穩貨物，需先確認不會再有物件墜下" },
+                    { loc: "維多利亞公園硬地足球場", weather: "晴朗微風，氣溫 27°C", hazard: "場地空曠安全，其他球員已暫停比賽圍觀" },
+                    { loc: "將軍澳屋苑裝修中單位", weather: "室內環境，氣溫 25°C，地面有建築廢料", hazard: "地上有鐵釘及木板，接近傷者時需注意腳下安全" }
+                ],
+                narratives: [
+                    "搬運貨物期間，一個約 15 公斤重的木箱從貨架滑落，直接砸中傷者的{part}（{detail}）。傷者隨即痛苦倒地，無法移動該部位，局部迅速出現紅腫及變形。",
+                    "進行球類活動時與對手發生猛烈碰撞，對方膝蓋直接頂撞到傷者的{part}（{detail}），傷者感到劇痛難當，局部有明顯壓痛及腫脹。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 完全清醒", "痛苦呻吟，能清楚回答問題"],
+                    pulse: [108, 122, "略為加快（因疼痛及緊張刺激）"],
+                    resp: [20, 24, "略快，因疼痛而呼吸較淺"],
+                    bp: ["128/82 mmHg", "輕微偏高（疼痛引發交感神經反應）"],
+                    spo2: ["98%", "正常"],
+                    skin: ["36.7°C｜面色微紅、額頭冒汗", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 確保現場安全並佩戴手套。\n2. 評估傷處是否有開放性傷口或嚴重出血，如有出血先以敷料直接壓迫止血。\n3. 妥善承托及固定受傷部位（如使用三角巾手掛或夾板固定鄰近關節），切勿強行將變形骨折復位。\n4. 冰敷減輕腫痛（避免冰塊直接接觸皮膚），安撫傷者並召喚救護車。"
+            },
+            {
+                id: "MOI_02",
+                type: "間接暴力 (Indirect Force)",
+                desc: "外力傳導至距離受力點較遠的部位造成損傷（如跌倒時手掌撐地導致鎖骨或肱骨骨折）。",
+                injuries: "遠端骨折、關節脫位（甩骹）、韌帶拉傷",
+                ageRange: [16, 70],
+                scenes: [
+                    { loc: "中環港鐵站出口樓梯級", weather: "雨天濕滑，氣溫 22°C，濕度 90%", hazard: "人流較多且地面濕滑，需請站務員協助維持秩序" },
+                    { loc: "沙田城門河畔單車徑", weather: "多雲清涼，氣溫 21°C，微風", hazard: "單車徑仍有單車高速駛過，需在後方設置警示" }
+                ],
+                narratives: [
+                    "傷者在濕滑梯級踏空失足向前仆倒，本能地伸直單手手掌撐地緩衝，衝擊力向上傳導，導致{part}（{detail}）劇痛、出現異常隆起變形，完全無法抬起手臂。",
+                    "踩單車失平衡側翻，傷者以手肘/手掌著地支撐，隨即感到{part}（{detail}）傳來「啪」一聲及劇烈疼痛，關節鎖死無法活動。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 完全清醒", "神志清楚，用手托著受傷肢體"],
+                    pulse: [102, 116, "輕度加快，規則有力"],
+                    resp: [18, 22, "正常至輕微加快"],
+                    bp: ["124/78 mmHg", "正常偏高（疼痛反應）"],
+                    spo2: ["98%", "正常"],
+                    skin: ["36.6°C｜皮膚正常，略帶冷汗", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 讓傷者坐下並協助其以健側手托住傷肢，減輕重力牽扯。\n2. 檢查傷肢遠端脈搏（如橈動脈）、感覺及手指活動能力（CMS檢查）。\n3. 使用大手掛或三角巾將上肢妥善固定於胸前；切勿嘗試自行推回脫位關節。\n4. 安排送院進行X光檢查及治療。"
+            },
+            {
+                id: "MOI_03",
+                type: "扭轉力 (Twisting / Rotational Force)",
+                desc: "肢體在固定狀態下受到旋轉外力（如運動急停轉向、足部被絆住時身體轉動）。",
+                injuries: "關節扭傷、韌帶撕裂、螺旋形骨折",
+                ageRange: [15, 55],
+                scenes: [
+                    { loc: "西貢麥理浩徑二段泥石山路", weather: "晴朗乾燥，氣溫 24°C，微風", hazard: "山路崎嶇不平且遠離車路，需評估是否需要召喚飛行服務隊或民安隊協助" },
+                    { loc: "旺角室內羽毛球場", weather: "室內冷氣環境，氣溫 22°C", hazard: "球場環境安全，無即時環境威脅" }
+                ],
+                narratives: [
+                    "傷者跑動中突然急停轉身，足部踩在凹陷處固定不動，身體慣性繼續旋轉，扭傷{part}（{detail}）。現場聽到清脆聲響，傷處迅速腫脹瘀青，完全無法負重站立。",
+                    "下山時腳尖卡在樹根縫隙，身體向前傾倒扭轉，導致{part}（{detail}）劇烈疼痛並出現明顯腫脹。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 完全清醒", "神志清醒，表情痛苦"],
+                    pulse: [96, 112, "輕微加快，規則"],
+                    resp: [18, 20, "正常"],
+                    bp: ["120/76 mmHg", "正常"],
+                    spo2: ["99%", "正常"],
+                    skin: ["36.5°C｜皮膚正常溫暖", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 立即停止活動，讓傷者坐下或躺下休息（RICE原則：休息、冰敷、加壓、抬高）。\n2. 脫下鞋襪前先評估是否會加劇痛楚（如懷疑骨折則保留鞋履作固定或小心剪開）。\n3. 用彈性繃帶作「8字形」包紮承托並冰敷 15-20 分鐘，檢查腳趾血液循環。\n4. 抬高傷肢並安排送院診治。"
+            },
+            {
+                id: "MOI_04",
+                type: "剪切力 (Shearing Force)",
+                desc: "兩股方向相反的平行力作用於組織，導致皮膚或深層組織撕裂分離。",
+                injuries: "撕脫傷（Avulsion）、大面積擦傷、皮膚掀開撕裂",
+                ageRange: [20, 65],
+                scenes: [
+                    { loc: "葵涌貨櫃碼頭物流倉庫", weather: "陰天，氣溫 25°C", hazard: "附近有鏟車運作，需先確保機械已熄火停妥" },
+                    { loc: "大埔林錦公路單車徑彎位", weather: "晴天，氣溫 28°C，路面有沙石", hazard: "彎位視線受阻，需派人於上游提醒其他單車使用者" }
+                ],
+                narratives: [
+                    "傷者在斜坡滑倒後高速滑行數米，粗糙地面與皮膚產生強烈剪切摩擦，導致{part}（{detail}）出現大面積深度擦傷及皮瓣撕脫，傷口滲血並沾有沙石。",
+                    "操作打包機時衣物被傳送帶邊緣勾住拉扯，造成{part}（{detail}）皮膚及皮下組織撕裂，有中度持續出血。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 完全清醒", "清醒，因傷口痛楚而焦慮"],
+                    pulse: [106, 118, "加快，規則"],
+                    resp: [20, 24, "略急促"],
+                    bp: ["114/72 mmHg", "正常"],
+                    spo2: ["98%", "正常"],
+                    skin: ["36.6°C｜面色略白、輕微出汗", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 佩戴一次性醫用防護手套，避免血液接觸。\n2. 若有掀起的皮瓣，輕輕將其蓋回原位（切勿剪除）；切勿強行挖出嵌在深層的沙石。\n3. 使用無菌敷料覆蓋傷口並施加直接壓力止血，再以繃帶妥善包紮固定。\n4. 安排送院清洗傷口及注射破傷風疫苗。"
+            },
+            {
+                id: "MOI_05",
+                type: "擠壓與壓迫力 (Crushing Force)",
+                desc: "身體部位被重物長時間夾住或壓迫（如倒塌物、機械夾傷、車輪輾壓）。",
+                injuries: "壓碎傷、筋膜室綜合症、嚴重內出血、擠壓綜合症（釋放後休克及高血鉀風險）",
+                ageRange: [22, 60],
+                scenes: [
+                    { loc: "啟德發展區建築地盤地庫", weather: "悶熱無風，氣溫 30°C", hazard: "上方棚架及鋼筋結構仍可能鬆動，救護前必須確認重物已完全穩固支撐" },
+                    { loc: "荃灣工廠大廈印刷廠房", weather: "室內環境，氣溫 25°C", hazard: "重型印刷機械電源已切斷，油壓系統已鎖定" }
+                ],
+                narratives: [
+                    "一疊重型鋼板滑落，壓住傷者的{part}（{detail}）約 25 分鐘後才被工友用千斤頂移開。傷處現已極度腫脹、皮膚呈紫藍色且失去感覺，傷者開始出現頭暈及口渴。",
+                    "工人在搬運大型貨櫃門時不慎被夾傷{part}（{detail}），被困約 10 分鐘。現時重物已移開，傷肢冰冷蒼白、劇痛難當。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 清醒但神情疲憊", "表現焦躁不安，不斷要求飲水"],
+                    pulse: [122, 136, "過快且趨向微弱（早期休克徵象）"],
+                    resp: [24, 28, "急促且淺"],
+                    bp: ["88/54 mmHg", "偏低（組織液大量滲出及內出血導致低血容量休克）"],
+                    spo2: ["95%", "正常下限"],
+                    skin: ["36.1°C｜面色蒼白、皮膚濕冷", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 重要原則：若被壓超過 15 分鐘且仍被重物壓住，切勿擅自移開重物（應待消防及醫護到場），否則毒素湧入心臟可致驟停。\n2. 本個案重物已移開：立即讓傷者平臥、保暖，但【切勿】抬高嚴重壓碎的肢體，亦【切勿】使用止血帶（除非出現無法控制的致命大出血）。\n3. 記錄被壓時間及移開時間，切勿給予飲食，立即致電 999 緊急送院。"
+            },
+            {
+                id: "MOI_06",
+                type: "減速與加速力 (Acceleration / Deceleration Force)",
+                desc: "身體突然加速或急停，但內部器官因慣性繼續移動（如急煞車、追尾撞擊）。",
+                injuries: "揮鞭式頸部創傷（Whiplash）、腦震盪、主動脈或內臟撕裂",
+                ageRange: [20, 68],
+                scenes: [
+                    { loc: "紅磡海底隧道九龍入口慢線", weather: "陰天有微雨，氣溫 22°C，路面濕滑", hazard: "後方仍有車流駛近，需開啟死火燈並在車後擺放三角警告牌" },
+                    { loc: "吐露港公路往大埔方向快線", weather: "晴朗，氣溫 26°C，能見度高", hazard: "高速公路車速極快，切勿在車道中央停留" }
+                ],
+                narratives: [
+                    "傷者駕駛私家車因應前方交通擠塞急煞停下，隨即被後方一輛貨車猛烈追尾撞擊。安全氣袋彈出，傷者頭部劇烈前後甩動，現時主訴{part}（{detail}）劇痛、僵硬及頭暈作嘔。",
+                    "小巴在行駛途中突然緊急煞車，沒有佩戴安全帶的乘客向前猛衝撞向椅背，隨後反彈跌坐走廊，主訴{part}（{detail}）及胸腹部隱隱作痛。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 清醒但反應略遲鈍", "能對答，但主訴頭暈及頸背劇痛"],
+                    pulse: [110, 124, "加快（需警惕隱匿性內出血）"],
+                    resp: [20, 24, "略急促"],
+                    bp: ["104/66 mmHg", "正常偏低（需密切監察是否持續下降）"],
+                    spo2: ["97%", "正常"],
+                    skin: ["36.3°C｜面色蒼白、微冷汗", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 高度懷疑頸椎及脊椎受傷：立即以雙手穩定傷者頭部於中立位置（Manual In-line Stabilization），叮囑傷者切勿轉動頸部。\n2. 評估氣道及呼吸（如在車內且無即時火警爆炸危險，應在車內穩定傷者待消防員協助救出）。\n3. 檢查胸腹部是否有內出血徵象（瘀痕、壓痛、休克表徵）。\n4. 持續監察生命表徵及意識變化，致電 999 召喚救護車。"
+            },
+            {
+                id: "MOI_07",
+                type: "高處墮下 (Fall from Height)",
+                desc: "從高於站立高度跌落（如棚架、梯子、窗台），衝擊力與墮下高度成正比。",
+                injuries: "多發性骨折、脊椎損傷、顱腦創傷、內臟破裂、休克",
+                ageRange: [20, 62],
+                scenes: [
+                    { loc: "深水埗舊樓外牆竹棚下方行人路", weather: "多雲有陣風，氣溫 24°C", hazard: "上方竹棚仍有鬆脫竹枝或工具可能墮下，應評估情況後才安全接近" },
+                    { loc: "元朗村屋天台花園", weather: "晴天，氣溫 29°C", hazard: "現場環境穩定，無高空墜物風險" }
+                ],
+                narratives: [
+                    "工人在約 3.5 米高的工作梯上進行維修時失足墮下，背部及下肢先著地。傷者躺在地上痛苦呻吟，主訴{part}（{detail}）劇痛，且雙腿感到麻痺無力。",
+                    "傷者攀爬鋁梯清理冷氣機時不慎從約 2.5 米高處跌落地面，頭部及{part}（{detail}）撞擊地磚，曾短暫失去知覺約 10 秒。"
+                ],
+                vitalsProfile: {
+                    avpu: ["V – 對聲音有反應", "閉眼呻吟，呼喚時能睜眼對答"],
+                    pulse: [126, 140, "顯著過快且微弱"],
+                    resp: [24, 28, "急促且淺"],
+                    bp: ["84/50 mmHg", "顯著下降（失血性或神經性休克）"],
+                    spo2: ["94%", "輕度偏低"],
+                    skin: ["35.9°C｜面色蒼白、皮膚濕冷", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 假設傷者有嚴重脊椎及頭部創傷：立即固定頭頸部，嚴禁隨意搬動傷者。\n2. 保持氣道暢通（使用推下顎法 Jaw Thrust 代替壓額提頦法，避免頸椎受壓）。\n3. 檢查並控制任何顯著外出血，替傷者蓋上保溫氈預防低溫症及休克惡化。\n4. 切勿給予任何飲食，立即致電 999 並每 5 分鐘監察一次生命表徵。"
+            },
+            {
+                id: "MOI_08",
+                type: "道路交通意外 (Motor Vehicle Collision)",
+                desc: "涉及車輛碰撞、行人被撞、電單車翻側等高能量複合創傷。",
+                injuries: "連枷胸、氣胸、骨盆骨折、嚴重外出血、多處骨折",
+                ageRange: [19, 65],
+                scenes: [
+                    { loc: "觀塘繞道往油塘方向路肩", weather: "夜晚有雨，氣溫 20°C，視野較暗", hazard: "高速路段極度危險！必須穿著反光衣、在車後 100 米放置警示牌並先報警" },
+                    { loc: "銅鑼灣軒尼詩道電車路旁", weather: "陰天，氣溫 25°C", hazard: "電車及巴士已停駛，途人圍觀眾多，需請途人協助維持安全空間" }
+                ],
+                narratives: [
+                    "一名電單車司機在濕滑路面上失控翻側，連人帶車滑行撞向路邊防撞欄，頭盔已脫落。傷者俯臥在路邊，主訴{part}（{detail}）劇痛，呼吸時胸壁疼痛，右大腿亦明顯變形。",
+                    "行人橫過馬路時被一輛轉彎的士撞倒拋出約 3 米，頭部及{part}（{detail}）猛烈撞擊路面，現場地面留有血跡。"
+                ],
+                vitalsProfile: {
+                    avpu: ["V – 對聲音有反應", "神志迷糊，對痛楚及大聲呼喚有反應"],
+                    pulse: [130, 144, "過快且微弱（嚴重休克徵象）"],
+                    resp: [26, 32, "急促費力，呼吸幅度不對稱"],
+                    bp: ["80/48 mmHg", "顯著下降（懷疑骨盆/股骨或內臟大出血）"],
+                    spo2: ["91%", "低於正常（需高濃度氧氣支援）"],
+                    skin: ["35.8°C｜面色蒼白、嘴唇微紫、皮膚濕冷", "瞳孔：雙側等大，反應略遲緩"]
+                },
+                firstAid: "1. 最高優先確保自身交通及現場安全，立即致電 999 報告車禍位置、傷者人數及嚴重程度。\n2. 穩定頭頸椎（如須將俯臥傷者翻為仰臥以檢查呼吸，必須使用「整體翻身法 Log Roll」）。\n3. 立即以直接壓迫法止血，妥善固定骨折部位，預防休克並保暖。\n4. 持續監察氣道、呼吸及意識，隨時準備施行 CPR 及使用 AED。"
+            },
+            {
+                id: "MOI_09",
+                type: "穿透性創傷 (Penetrating Trauma)",
+                desc: "尖銳物體刺穿皮膚及深層組織（如刀傷、玻璃碎片、鋼筋刺入）。",
+                injuries: "深層動脈/靜脈大出血、內臟穿孔、開放性氣胸、異物嵌塞",
+                ageRange: [20, 58],
+                scenes: [
+                    { loc: "油麻地果欄批發市場檔口", weather: "清晨微涼，氣溫 21°C，地面潮濕", hazard: "現場有刀具及木箱，需確認行兇者/危險物品已遠離，確保個人安全" },
+                    { loc: "荃灣家居廚房", weather: "室內環境，氣溫 24°C", hazard: "地上有碎裂玻璃杯及水漬，需小心避開玻璃碎片" }
+                ],
+                narratives: [
+                    "傷者搬運玻璃門時玻璃突然爆裂，一塊長約 12 厘米的尖銳玻璃深深刺入並嵌塞在{part}（{detail}）中，傷口周圍有鮮血不斷滲出，傷者驚慌失措。",
+                    "在工場操作切割工具時發生意外，金屬碎片飛濺刺入傷者的{part}（{detail}），現場見有鮮紅色血液湧出。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 完全清醒", "極度驚恐、呼吸急促，漸感頭暈"],
+                    pulse: [124, 138, "過快且趨向微弱（失血性休克早期）"],
+                    resp: [24, 28, "急促"],
+                    bp: ["88/54 mmHg", "偏低（持續失血導致血壓下降）"],
+                    spo2: ["95%", "正常下限"],
+                    skin: ["36.0°C｜面色蒼白、皮膚濕冷冒汗", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 【關鍵禁忌】：若尖銳異物（如玻璃、刀具）仍嵌塞在體內，絕對不可拔除！拔除會失去填塞效應並引發致命大出血。\n2. 佩戴防護手套，在異物兩側用乾淨敷料墊高並加壓止血，再以環形墊及繃帶固定異物防止晃動。\n3. 若無異物嵌塞（如開放性胸部吸吮傷口），應用三邊封閉敷料覆蓋；一般傷口則直接施壓止血。\n4. 讓傷者平臥、保暖、預防休克，立即致電 999 緊急送院。"
+            },
+            {
+                id: "MOI_10",
+                type: "爆炸與氣浪創傷 (Blast Injury)",
+                desc: "爆炸產生的高壓氣浪、飛濺碎片及高熱衝擊身體（如氣體洩漏爆炸、壓力容器爆破）。",
+                injuries: "耳膜破裂、肺部氣浪傷、多處碎片穿透傷、燒傷、撞擊骨折",
+                ageRange: [22, 60],
+                scenes: [
+                    { loc: "土瓜灣茶餐廳廚房後巷", weather: "晴天，氣溫 28°C", hazard: "懷疑石油氣罐洩漏引發閃燃爆破，必須確認氣體總掣已關掉且無二次爆炸風險" },
+                    { loc: "粉嶺汽車維修工場", weather: "室內通風環境，氣溫 27°C", hazard: "風煤樽爆破後現場煙霧瀰漫，需先確保空氣流通及無明火" }
+                ],
+                narratives: [
+                    "廚房煮食爐具懷疑石油氣洩漏突然發生小型氣爆，強大氣浪將傷者震飛約 2 米撞向牆壁。傷者現時雙耳耳鳴聽力下降、咳嗽帶血絲，且{part}（{detail}）被飛濺碎片割傷及局部紅腫起水泡。",
+                    "輪胎充氣時壓力過高突然爆破，氣浪及橡膠碎片擊中傷者的{part}（{detail}），傷者痛苦倒地，呼吸急促。"
+                ],
+                vitalsProfile: {
+                    avpu: ["V – 對聲音有反應", "因耳鳴及震盪而神志迷糊，大聲呼喚方有反應"],
+                    pulse: [128, 142, "過快且微弱"],
+                    resp: [28, 34, "極度急促且費力（警惕爆炸肺損傷）"],
+                    bp: ["86/52 mmHg", "顯著下降（複合創傷及休克）"],
+                    spo2: ["89%", "顯著下降（肺泡氣浪損傷影響氣體交換）"],
+                    skin: ["36.2°C｜面色蒼白、鼻孔及嘴角有煙灰痕跡", "瞳孔：雙側等大，對光有反應"]
+                },
+                firstAid: "1. 確認現場已無火警、漏氣或二次爆炸危險後，立即致電 999 報告爆炸事故。\n2. 優先評估氣道（檢查口腔鼻孔是否有煙灰或水腫，警惕吸入性氣道灼傷）及呼吸狀況。\n3. 控制顯著出血，用無菌敷料或保鮮紙輕輕覆蓋燒傷部位（切勿弄破水泡或塗抹藥膏）。\n4. 讓傷者採取半坐臥姿勢（若無脊椎傷）以利呼吸，持續監察生命表徵。"
+            },
+            {
+                id: "MOI_11",
+                type: "熱力 / 化學 / 電擊創傷 (Thermal / Chemical / Electrical)",
+                desc: "接觸高溫熱源、腐蝕性化學品或電流通過身體造成的組織破壞。",
+                injuries: "一至三度燒傷/燙傷、吸入性氣道水腫、化學灼傷、電擊致心律不正/心跳驟停",
+                ageRange: [18, 60],
+                scenes: [
+                    { loc: "尖沙咀食肆廚房", weather: "室內高溫環境，氣溫 31°C", hazard: "地上仍有滾燙熱油，小心滑倒及二次燙傷" },
+                    { loc: "觀塘商業大廈機電房", weather: "室內環境，氣溫 24°C", hazard: "高壓電箱故障，接近前必須確認總電源已完全切斷！" }
+                ],
+                narratives: [
+                    "廚師搬運一大鍋滾燙熱湯時不慎絆倒，熱湯潑濺在{part}（{detail}）上，皮膚瞬間通紅並起出多個大水泡，傷者痛得大叫。",
+                    "技術員維修配電箱時意外觸電被彈開倒地，電源現已被同事切斷。傷者醒來後神情呆滯，手部及{part}（{detail}）可見焦黑的電流出入口燒傷痕跡。"
+                ],
+                vitalsProfile: {
+                    avpu: ["A – 清醒但極度痛楚", "神志清醒，因劇痛而全身顫抖"],
+                    pulse: [118, 134, "過快（若為電擊傷需特別留意脈搏是否不規則）"],
+                    resp: [22, 26, "急促"],
+                    bp: ["96/60 mmHg", "正常偏低（大面積燒傷體液流失風險）"],
+                    spo2: ["96%", "正常"],
+                    skin: ["36.5°C｜傷處紅腫起水泡/焦黑，其餘皮膚出汗", "瞳孔：雙側等大圓形，對光有反應"]
+                },
+                firstAid: "1. 確保安全（電擊傷必須先切斷電源；化學傷需佩戴手套並查看化學品標籤）。\n2. 熱力燒傷：立即用大量流動清涼自來水沖洗傷處至少 10–20 分鐘降溫（化學灼傷需沖洗至少 20 分鐘以上）。\n3. 在傷處腫脹前小心除下戒指、手錶或緊身衣物（切勿撕扯黏連皮膚的衣物）。\n4. 用清潔保鮮紙或無菌不黏性敷料覆蓋傷口（切勿刺穿水泡或塗抹牙膏/醬油），保暖並送院（電擊傷必須送院作心電圖檢查）。"
+            }
+        ];
+
+        // 表三：24種《急救診斷與生命表徵對照表》完整臨床資料庫
+        const MEDICAL_CONDITIONS_DATA = [
+            {
+                id: "MED_01",
+                category: "休克與循環系統",
+                name: "低血容量休克（大出血 / 嚴重脫水）",
+                ageRange: [20, 70],
+                avpu: "A / V（初期焦躁，後期神志迷糊）",
+                pulse: "過快且微弱（120–140 次/分）",
+                resp: "急促且淺（22–30 次/分）",
+                bp: "顯著下降（收縮壓 < 90 mmHg，如 82/50 mmHg）",
+                spo2: "93% – 96%（末梢循環差可能影響讀數）",
+                skinTemp: "35.8°C｜面色蒼白、皮膚濕冷出汗",
+                pupils: "雙側等大，隨意識下降反應變慢",
+                scenes: [
+                    { loc: "新界元朗農田貨倉", weather: "陰天，氣溫 24°C", hazard: "地面有積水及農具，現場已安全" },
+                    { loc: "九龍城唐樓家居客廳", weather: "室內環境，氣溫 25°C", hazard: "地上有血跡，請佩戴防護手套" }
+                ],
+                narrative: "傷者因意外割傷小腿深層血管（或連續嚴重嘔吐腹瀉兩日），雖已初步包紮，但仍感到極度口渴、頭暈眼花及全身無力，現時躺臥在地上不住顫抖。",
+                assessment: "識別代償期至失代償期休克徵象（心率飆升、脈壓差變窄、血壓跌破 90 mmHg、皮膚濕冷）。立即控制任何活動性出血，讓傷者平臥並抬高雙腿（如無骨折或呼吸困難），蓋上毛氈保暖，切勿給予飲食，立即致電 999 送院。"
+            },
+            {
+                id: "MED_02",
+                category: "休克與循環系統",
+                name: "心因性休克（心肌梗塞引起）",
+                ageRange: [55, 82],
+                avpu: "A / V（極度焦慮恐懼或神志不清）",
+                pulse: "過快且微弱，或過慢不規則（如 128 次/分或 46 次/分）",
+                resp: "急促費力（24–30 次/分）",
+                bp: "顯著下降（如 80/48 mmHg）",
+                spo2: "88% – 92%（顯著下降）",
+                skinTemp: "35.9°C｜面色灰白、嘴唇發紺、大汗淋漓",
+                pupils: "雙側等大，對光有反應",
+                scenes: [
+                    { loc: "港鐵金鐘站大堂長椅旁", weather: "室內冷氣環境，氣溫 22°C", hazard: "人流繁忙，已由港鐵職員圍起屏風保障私隱" },
+                    { loc: "沙田屋苑會所休息室", weather: "室內冷氣環境，氣溫 23°C", hazard: "現場備有自動體外心臟去顫器 (AED)" }
+                ],
+                narrative: "傷病者有高血壓及冠心病史，剛才突然感到胸口正中猶如被巨石壓住般劇痛，痛楚蔓延至左肩及下巴，隨即呼吸困難、全身冒冷汗並癱軟在座椅上。",
+                assessment: "心臟泵血功能嚴重衰竭。立即讓傷者採取舒適的「半坐臥姿勢（W型姿勢）」減輕心臟負荷（切勿平躺或抬高雙腿！），解開緊身衣領，保持空氣流通，若有處方硝酸甘油（脷底丸）且血壓未過低可協助服用（本個案血壓已過低故不可服用！），備妥 AED 並立即致電 999。"
+            },
+            {
+                id: "MED_03",
+                category: "休克與循環系統",
+                name: "嚴重過敏性休克 (Anaphylaxis)",
+                ageRange: [14, 50],
+                avpu: "A / V（迅速惡化，可能很快昏迷）",
+                pulse: "極快且微弱（130–150 次/分）",
+                resp: "極度急促、喘鳴（Wheezing）或喉頭緊閉聲（28–36 次/分）",
+                bp: "急劇下降（如 76/44 mmHg）",
+                spo2: "86% – 91%（顯著下降）",
+                skinTemp: "36.8°C｜全身皮膚潮紅、出現大片蕁麻疹（風癩），眼皮嘴唇嚴重水腫",
+                pupils: "雙側等大",
+                scenes: [
+                    { loc: "西貢海鮮酒家包廂", weather: "室內冷氣環境，氣溫 23°C", hazard: "桌面仍有海鮮食物，需立即移除致敏源" },
+                    { loc: "大嶼山昂坪郊遊徑涼亭", weather: "晴朗有風，氣溫 26°C", hazard: "剛被黃蜂螫傷，需留意附近是否仍有蜂群" }
+                ],
+                narrative: "傷病者對花生/海鮮/蜂毒有嚴重過敏史，進食後（或被昆蟲螫傷後）短短 5 分鐘內全身冒出大片紅色風癩，嘴唇及舌頭迅速腫脹，聲音沙啞並喘氣，隨即頭暈無力。",
+                assessment: "致命性全身過敏反應導致氣道水腫及血管擴張休克。立即檢查傷者隨身是否攜帶「腎上腺素自動注射筆 (EpiPen / Jext)」，協助其在大腿前外側肌肉注射（可隔著薄衣物注射）；讓其採取半坐臥利於呼吸（若血壓極低頭暈則平臥抬腿），立即致電 999，若 5–15 分鐘無改善可準備第二支注射筆。"
+            },
+            {
+                id: "MED_04",
+                category: "休克與循環系統",
+                name: "血管迷走神經性暈厥（普通暈倒 Fainting）",
+                ageRange: [15, 45],
+                avpu: "U → A（短暫喪失意識數十秒後迅速完全恢復清醒）",
+                pulse: "發作時偏慢（48–56 次/分），恢復後回升至正常（68 次/分）",
+                resp: "正常或略淺（14–18 次/分）",
+                bp: "發作時暫時偏低（如 88/54 mmHg），平臥後迅速回升（112/70 mmHg）",
+                spo2: "97% – 99%（正常）",
+                skinTemp: "36.4°C｜面色蒼白、額頭冒冷汗",
+                pupils: "雙側等大圓形，對光反應正常",
+                scenes: [
+                    { loc: "灣仔會議展覽中心排隊區", weather: "室內人多擠迫，氣溫 25°C，空氣略悶熱", hazard: "周圍人群擠迫，需請途人散開保持空氣流通" },
+                    { loc: "學校操場早會集合區", weather: "晴朗微熱，氣溫 28°C", hazard: "現場安全，有老師在旁協助" }
+                ],
+                narrative: "傷病者早上未吃早餐，在悶熱擠迫的環境下連續站立超過 45 分鐘，剛才感到眼前發黑、耳鳴作嘔，隨即緩緩滑倒地上失去知覺約 15 秒。你到場時他剛睜開眼睛，能認出周圍環境。",
+                assessment: "腦部短暫供血不足引起的良性暈厥。讓傷者繼續平臥在地上，將其雙腿抬高約 15–30 厘米（承托於椅上或行李上）以促進血液回流腦部；解開緊身衣領，確保空氣流通；檢查跌倒時有否撞傷頭部；休息 10–15 分鐘待完全恢復後方可慢慢坐起（若超過 2 分鐘未醒則按昏迷處理並報警）。"
+            },
+            {
+                id: "MED_05",
+                category: "呼吸系統急症",
+                name: "氣道異物梗塞（完全阻塞 Choking）",
+                ageRange: [4, 78],
+                avpu: "A → U（初期極度驚恐掙扎，數分鐘內因缺氧昏迷）",
+                pulse: "初期過快（126 次/分），缺氧後期轉慢甚至停止",
+                resp: "0 次/分（無空氣進出，無法發聲咳嗽，雙手緊握頸部）",
+                bp: "初期偏高（136/86 mmHg），後期急降",
+                spo2: "急劇下降（< 85%，如 78%）",
+                skinTemp: "36.6°C｜面部漲紅迅速轉為青紫（發紺 Cyanosis）、頸靜脈怒張",
+                pupils: "雙側等大，缺氧後期散大",
+                scenes: [
+                    { loc: "旺角茶餐廳卡位", weather: "室內冷氣環境，氣溫 23°C", hazard: "桌面有熱奶茶及餐具，施救時需移開桌椅避免碰撞" },
+                    { loc: "家中飯廳", weather: "室內環境，氣溫 24°C", hazard: "現場安全" }
+                ],
+                narrative: "傷病者進食牛丸/牛排時與朋友談笑，突然停止進食，雙手緊緊抓著喉嚨，張大嘴巴卻發不出任何聲音，無法咳嗽，臉色迅速轉為青紫。",
+                assessment: "完全性氣道異物梗塞（致命急症）。傷者仍清醒時：立即交替施行「5 次背部拍擊（拍肩胛骨之間）」及「5 次腹部衝擊法（謙烈治急救法 Heimlich Maneuver）」（若為孕婦或極度肥胖者則改用胸部衝擊法），直至異物吐出。一旦傷者失去知覺昏迷：立即小心扶臥地上、致電 999 並立即開始心肺復甦法 (CPR)（每次吹氣前檢查口腔有否可見異物）。"
+            },
+            {
+                id: "MED_06",
+                category: "呼吸系統急症",
+                name: "哮喘急性發作 (Acute Asthma Attack)",
+                ageRange: [12, 48],
+                avpu: "A（清醒但極度焦慮，只能逐字吐出短句）",
+                pulse: "過快（118–132 次/分）",
+                resp: "急促費力（26–34 次/分），呼氣明顯延長伴高音哮鳴音",
+                bp: "正常或輕微偏高（128/80 mmHg）",
+                spo2: "89% – 93%（低於正常）",
+                skinTemp: "36.6°C｜面色蒼白出汗，嚴重時嘴唇微紫，使用頸肩輔助呼吸肌",
+                pupils: "雙側等大圓形，對光有反應",
+                scenes: [
+                    { loc: "荃灣公園緩跑徑長椅", weather: "乾燥轉涼，氣溫 16°C，空氣污染指數偏高", hazard: "環境安全，但天氣寒冷乾燥易誘發支氣管痙攣" },
+                    { loc: "家中書房", weather: "室內環境，剛進行大掃除揚起灰塵", hazard: "需開窗通風或遠離塵埃環境" }
+                ],
+                narrative: "傷病者有多年哮喘病史，剛才在冷空氣中快步走後突然感到胸口緊縮、氣喘不止，呼氣時發出明顯「咻咻」喘鳴聲，無法說出完整句子，正緊張地翻找背包。",
+                assessment: "支氣管平滑肌痙攣及黏膜水腫導致氣道狹窄。立即安撫傷者保持冷靜（恐慌會加劇氣喘），讓其採取前傾坐姿（身體微向前傾、雙手撐膝或伏在桌上）；協助使用其自備的藍色「氣管舒張劑（如 Salbutamol 吸入器）」（最好配合儲霧器 Spacer，每吸一口閉氣 10 秒）；若用藥後無改善、呼吸極度衰竭或無自備藥物，立即致電 999。"
+            },
+            {
+                id: "MED_07",
+                category: "呼吸系統急症",
+                name: "過度換氣症候群 (Hyperventilation)",
+                ageRange: [15, 38],
+                avpu: "A（極度恐慌激動，不斷呼喊「抖唔到氣」）",
+                pulse: "過快（116–130 次/分）",
+                resp: "極度急促且深（32–42 次/分）",
+                bp: "正常或略高（130/82 mmHg）",
+                spo2: "99% – 100%（血氧飽和度完全正常甚至滿分！）",
+                skinTemp: "36.7°C｜面色潮紅或微白、手腳麻痺抽搐（呈「助產士手」鷹爪狀痙攣）",
+                pupils: "雙側等大圓形，對光有反應",
+                scenes: [
+                    { loc: "九龍塘試場外走廊", weather: "室內冷氣環境，氣溫 22°C", hazard: "周圍有其他考生圍觀，容易增加患者心理壓力" },
+                    { loc: "尖沙咀商場休息區", weather: "室內冷氣環境，氣溫 23°C", hazard: "環境安全" }
+                ],
+                narrative: "傷病者在公開考試前（或與人激烈爭執後）情緒極度激動，呼吸變得又快又深，主訴胸口刺痛、頭暈、嘴唇及雙手指尖劇烈麻痺，手指不自主地僵硬向內彎曲。",
+                assessment: "情緒壓力導致過度呼吸，排出過多二氧化碳引起呼吸性鹼中毒（血氧儀顯示 SpO₂ 達 99-100% 可助鑑別非真正缺氧）。將傷者帶離人多嘈雜環境；以冷靜堅定語氣安撫，指導其跟隨導師節奏「慢吸氣（4秒）、閉氣（2秒）、慢呼氣（6秒）」；【注意】現代急救已不建議使用紙袋呼吸法（以免誤判真正缺氧急症）；若 10 分鐘未緩解則送院。"
+            },
+            {
+                id: "MED_08",
+                category: "呼吸系統急症",
+                name: "溺水 (Drowning)",
+                ageRange: [6, 65],
+                avpu: "V / U（昏迷或神志迷糊，不斷咳嗽吐出泡沫水）",
+                pulse: "微弱過慢或過快（嚴重時 0 次/分）",
+                resp: "微弱不規則、喘息或停止（0 次/分）",
+                bp: "下降（如 84/50 mmHg）",
+                spo2: "80% – 88%（嚴重缺氧）",
+                skinTemp: "35.2°C｜全身濕透、皮膚蒼白冰冷、嘴唇指甲發紺",
+                pupils: "雙側等大（嚴重缺氧時散大）",
+                scenes: [
+                    { loc: "西貢清水灣第二灘救生員站旁沙灘", weather: "晴朗，氣溫 29°C，海風清涼", hazard: "傷者已由救生員救上乾燥沙灘，遠離海浪" },
+                    { loc: "屋苑會所室外泳池池邊", weather: "多雲，氣溫 24°C", hazard: "池邊地磚濕滑，施救時注意防滑及留意 AED 電極片需貼在擦乾的胸壁上" }
+                ],
+                narrative: "傷病者在海中遇溺被救起上岸，口鼻不斷湧出白色帶粉紅泡沫的液體，呼吸微弱費力，全身發抖冰冷。",
+                assessment: "缺氧是溺水致死主因！立即檢查反應及呼吸：若無正常呼吸，【優先給予 5 次人工呼吸 (Rescue Breaths)】（與一般心臟病先按壓不同！），隨後立即進行 30:2 心肺復甦法 (CPR) 並致電 999；使用 AED 前必須先用毛巾徹底抹乾傷者胸部水分。若傷者仍有呼吸，將其置於復原臥式（方便排出嘔吐物及水），脫去濕衣並以毛氈保暖送院（所有溺水者均須送院防繼發性肺水腫）。"
+            },
+            {
+                id: "MED_09",
+                category: "神經系統急症",
+                name: "腦震盪 (Concussion)",
+                ageRange: [12, 65],
+                avpu: "A / V（曾短暫失憶或昏迷數秒，現已清醒但反應遲鈍）",
+                pulse: "正常或輕微加快（78–96 次/分）",
+                resp: "正常（14–18 次/分）",
+                bp: "正常（118/74 mmHg）",
+                spo2: "98%（正常）",
+                skinTemp: "36.5°C｜面色微白、主訴頭痛頭暈及噁心",
+                pupils: "雙側等大圓形，對光反應正常",
+                scenes: [
+                    { loc: "跑馬地草地欖球場邊", weather: "晴天，氣溫 25°C", hazard: "環境安全" },
+                    { loc: "辦公室茶水間", weather: "室內冷氣環境，氣溫 23°C", hazard: "地上有水漬導致滑倒，已清理" }
+                ],
+                narrative: "傷病者打球時頭部與隊友相撞倒地，曾短暫失去知覺約 15 秒。醒來後不斷重複問「剛才發生咩事？我哋打緊第幾節？」，主訴頭痛、視力略模糊及作嘔。",
+                assessment: "腦部受到震盪引起的短暫功能障礙（需警惕隨時惡化為顱內出血/腦受壓）。讓傷者立即停止所有運動並坐下或半臥休息，穩定頭頸部；觀察有否「危險警號」（如劇烈頭痛加劇、反覆嘔吐、耳鼻流出血水、瞳孔大小不一、意識再度轉差）；即使完全清醒亦應由親友陪同就醫評估，24小時內不可獨處或駕駛。"
+            },
+            {
+                id: "MED_10",
+                category: "神經系統急症",
+                name: "腦受壓 / 顱內出血 (Cerebral Compression)",
+                ageRange: [30, 80],
+                avpu: "V → P → U（意識水平進行性惡化，由嗜睡轉為昏迷）",
+                pulse: "異常減慢且強而有力（庫欣氏三聯徵：44–54 次/分）",
+                resp: "深慢且不規則，發出鼾聲（8–12 次/分）",
+                bp: "顯著升高（收縮壓飆升，如 186/104 mmHg）",
+                spo2: "92% – 95%",
+                skinTemp: "37.2°C｜面部潮紅、皮膚溫暖乾燥",
+                pupils: "【典型徵象】雙側瞳孔大小不等（一側瞳孔散大、對光無反應）",
+                scenes: [
+                    { loc: "九龍塘獨立屋樓梯轉角", weather: "室內環境，氣溫 24°C", hazard: "環境安全" },
+                    { loc: "地盤辦公室休息室", weather: "室內冷氣環境，氣溫 24°C", hazard: "環境安全" }
+                ],
+                narrative: "傷病者兩小時前曾撞傷頭部，當時看似無礙並繼續工作，但半小時前開始出現劇烈頭痛、噴射性嘔吐，隨後神志越來越迷糊，呼吸發出沉重鼾聲，左眼瞳孔明顯比右眼大。",
+                assessment: "顱內出血或水腫導致顱內壓急劇升高（極度危急！）。觀察到典型「庫欣氏反應（血壓飆升、脈搏變慢、呼吸不規則）」及瞳孔不等大。立即致電 999 緊急送院（需腦外科手術）；維持氣道暢通（若昏迷且無脊椎傷可置於復原臥式，或抬高頭肩部約 15–30 度減輕顱內壓）；切勿給予飲食，持續監察呼吸準備 CPR。"
+            },
+            {
+                id: "MED_11",
+                category: "神經系統急症",
+                name: "急性中風 (Stroke – 談笑用兵 FAST)",
+                ageRange: [55, 88],
+                avpu: "A / V（清醒但言語含糊不清或無法理解指令）",
+                pulse: "正常或偏快，可能不規則（如心房顫動 104 次/分）",
+                resp: "正常或略快（16–20 次/分）",
+                bp: "明顯偏高（如 178/98 mmHg）",
+                spo2: "95% – 97%",
+                skinTemp: "36.7°C｜面部潮紅，一側面部肌肉下垂流口水",
+                pupils: "雙側等大或輕微不等，對光有反應",
+                scenes: [
+                    { loc: "黃大仙酒樓早茶大廳", weather: "室內冷氣環境，氣溫 23°C", hazard: "茶客眾多，需請酒樓職員協助騰出空間" },
+                    { loc: "家中客廳沙發", weather: "室內環境，氣溫 25°C", hazard: "環境安全" }
+                ],
+                narrative: "傷病者喝茶時突然拿不穩筷子，右手無力垂下，家人發現他左邊嘴角歪斜流口水，說話含糊不清（「口齒不清」），視力模糊。",
+                assessment: "腦部血管阻塞或爆裂。立即運用「談笑用兵 (FAST)」口訣評估：談（表達不清）、笑（面部不對稱）、用（單側手腳無力）、兵（記錄病發準確時間並立即致電 999 救護車，把握黃金搶救時間！）。讓傷者採取頭肩略抬高的臥姿（若意識模糊則置於患側在下的復原臥式以防口水嗆咳）；切勿餵水或餵食任何藥物（包括降血壓藥或阿士匹靈）。"
+            },
+            {
+                id: "MED_12",
+                category: "神經系統急症",
+                name: "癲癇大發作 (Epileptic Seizure)",
+                ageRange: [10, 55],
+                avpu: "U（發作期間完全無反應，發作後進入昏睡期）",
+                pulse: "發作時無法準確測量，發作後過快（116–130 次/分）",
+                resp: "發作時暫停或發出喘鳴，發作後深快（22–26 次/分）",
+                bp: "發作後略高（134/84 mmHg）",
+                spo2: "發作時短暫下降（88%），發作後迅速回升（96%）",
+                skinTemp: "37.1°C｜發作時面色青紫、口吐白沫（可能帶血絲），全身出汗",
+                pupils: "發作時雙側散大、眼球上翻",
+                scenes: [
+                    { loc: "銅鑼灣地鐵站月台", weather: "室內冷氣環境，氣溫 22°C", hazard: "距離月台黃線約 1.5 米，需立即通知月台職員並保護傷者遠離路軌" },
+                    { loc: "大學演講廳走道", weather: "室內冷氣環境，氣溫 22°C", hazard: "周圍有桌椅硬物，需迅速移開以免撞傷" }
+                ],
+                narrative: "傷病者突然大叫一聲後僵直倒地，隨即四肢出現劇烈陣攣性抽搐、牙關緊閉、嘴角流出泡沫狀唾液，抽搐持續約 1 分半鐘後剛停止，現時全身軟癱昏睡。",
+                assessment: "大腦神經元異常放電。發作期間：保護傷者頭部（墊上軟衣物）、移開周圍硬物尖角、記錄發作開始時間；【三大禁忌】切勿強行按壓制止抽搐、切勿將任何物件（手指/毛巾/湯匙）塞入口中、切勿在發作時移動傷者。抽搐停止後：立即檢查呼吸，將傷者置於復原臥式保持氣道暢通（排出唾液）；若首次發作、抽搐超過 5 分鐘、連續發作或受傷，立即致電 999。"
+            },
+            {
+                id: "MED_13",
+                category: "心血管急症",
+                name: "心絞痛發作 (Angina Pectoris)",
+                ageRange: [50, 80],
+                avpu: "A（完全清醒，因胸痛而神情緊張）",
+                pulse: "輕微加快（96–112 次/分），規則",
+                resp: "略急促（20–24 次/分）",
+                bp: "正常或輕微偏高（138/86 mmHg）",
+                spo2: "95% – 97%（正常）",
+                skinTemp: "36.5°C｜面色微白、額頭冒汗",
+                pupils: "雙側等大圓形，對光有反應",
+                scenes: [
+                    { loc: "半山自動扶梯旁斜路", weather: "微涼有風，氣溫 17°C", hazard: "斜路坡度大，應立即扶傷者坐下休息" },
+                    { loc: "上環乾貨店門口", weather: "晴天，氣溫 26°C", hazard: "環境安全" }
+                ],
+                narrative: "傷病者急步上斜路後，突然感到胸骨後方出現一陣緊縮壓迫感，疼痛向左臂內側放射。他隨即停下腳步扶著欄杆，表示「我有心臟病，袋入面有脷底丸」。",
+                assessment: "心肌暫時性供血不足（通常由運動、情緒激動或寒冷誘發，休息及用藥後可緩解）。立即讓傷者停止一切活動，採取舒適坐姿或半坐臥姿勢；協助傷者自行將其處方的「硝酸甘油（脷底丸/噴霧）」放於舌下含服（切勿吞服，用藥時必須坐下以防血壓驟降頭暈）；若休息及含服兩劑（間隔5分鐘）後胸痛仍未完全消退，或首次發作，立即按心肌梗塞處理並致電 999。"
+            },
+            {
+                id: "MED_14",
+                category: "心血管急症",
+                name: "急性心肌梗塞 (Myocardial Infarction)",
+                ageRange: [48, 85],
+                avpu: "A / V（極度痛苦焦慮，有瀕死感）",
+                pulse: "過快或不規則（116–134 次/分），部分個案可能偏慢",
+                resp: "急促費力（24–28 次/分）",
+                bp: "偏低或波動（如 94/58 mmHg）",
+                spo2: "91% – 94%（偏低）",
+                skinTemp: "36.0°C｜面色蒼白灰暗、大汗淋漓、皮膚濕冷",
+                pupils: "雙側等大，對光有反應",
+                scenes: [
+                    { loc: "觀塘辦公室會議室", weather: "室內冷氣環境，氣溫 22°C", hazard: "環境安全，大樓大堂設有 AED" },
+                    { loc: "家中睡房床邊", weather: "室內環境，氣溫 24°C", hazard: "環境安全" }
+                ],
+                narrative: "傷病者開會期間突然感到胸口劇烈壓榨性疼痛，持續超過 20 分鐘仍未緩解（即使休息及含服脷底丸亦無效），伴隨噁心嘔吐、呼吸困難及全身大汗淋漓。",
+                assessment: "冠狀動脈完全阻塞導致心肌壞死（隨時可能誘發心室顫動心跳驟停！）。立即致電 999 召喚救護車並派人取來附近的 AED 備用；讓傷者採取最舒適的半坐臥姿勢（W型屈膝），保持絕對安靜及情緒穩定；若傷者無阿士匹靈過敏或胃出血史，可讓其嚼碎服用一粒 300mg 阿士匹靈 (Aspirin)；密切監察意識呼吸，一旦無呼吸立即 CPR 及使用 AED。"
+            },
+            {
+                id: "MED_15",
+                category: "心血管急症",
+                name: "心臟驟停 (Cardiac Arrest)",
+                ageRange: [35, 85],
+                avpu: "U（完全無反應，拍打雙肩及大聲呼喚均無反應）",
+                pulse: "0 次/分（頸動脈完全摸不到脈搏）",
+                resp: "0 次/分（無正常呼吸，或僅有瀕死喘息 Agonal Gasps）",
+                bp: "測不出（0/0 mmHg）",
+                spo2: "測不出",
+                skinTemp: "35.6°C｜面色死灰、嘴唇及指甲床嚴重發紺、皮膚冰冷",
+                pupils: "雙側瞳孔散大，對光無反應",
+                scenes: [
+                    { loc: "九龍灣室內羽毛球館場邊", weather: "室內冷氣環境，氣溫 23°C", hazard: "場館接待處牆上掛有 AED，環境安全" },
+                    { loc: "尖沙咀海濱長廊長椅旁", weather: "多雲清涼，氣溫 20°C", hazard: "行人路寬闊安全" }
+                ],
+                narrative: "傷病者剛打完一場羽毛球走到場邊喝水，突然毫無預警地向前撲倒地上，一動不動。你上前拍打其雙肩並大聲呼喚全無反應，觀察胸部亦無正常呼吸起伏。",
+                assessment: "最緊急致命狀況！立即啟動生存之鏈：1. 大聲呼救，指定旁人致電 999 並取來 AED；2. 讓傷者仰臥於堅硬平坦地面，立即開始高質素胸外按壓（位置：胸骨下半部；深度：5–6 厘米；速率：100–120 次/分鐘；按壓與人工呼吸比例 30:2）；3. AED 一到立即開機、貼上電極片並遵從語音指示分析心律及電擊，電擊後立即繼續 CPR 直至救護員接手或傷者恢復正常呼吸。"
+            },
+            {
+                id: "MED_16",
+                category: "代謝與內分泌急症",
+                name: "嚴重低血糖症 (Hypoglycaemia)",
+                ageRange: [16, 78],
+                avpu: "A → V（神志迷糊、胡言亂語、性格突變煩躁，嚴重時昏迷）",
+                pulse: "過快（112–128 次/分，腎上腺素代償反應）",
+                resp: "正常或略快（18–22 次/分）",
+                bp: "正常或略高（126/78 mmHg）",
+                spo2: "97% – 99%（正常）",
+                skinTemp: "36.1°C｜面色蒼白、全身大汗淋漓、雙手明顯顫抖",
+                pupils: "雙側等大，對光有反應",
+                scenes: [
+                    { loc: "中環寫字樓辦公室座位", weather: "室內冷氣環境，氣溫 22°C", hazard: "環境安全" },
+                    { loc: "大圍單車公園休息亭", weather: "晴天，氣溫 27°C", hazard: "環境安全" }
+                ],
+                narrative: "傷病者患有糖尿病，早上注射胰島素後因趕時間開會而忘記吃早餐。中午時分同事發現他神情呆滯、說話顛三倒四、雙手不停發抖、額頭及衣領被冷汗濕透。",
+                assessment: "血糖過低（< 4.0 mmol/L）影響腦部運作，起病極快。若傷者仍清醒且能安全吞嚥：立即給予 15–20 克快速吸收的糖分（如半杯含糖汽水/果汁、3–4 粒方糖或葡萄糖片）；等待 10–15 分鐘觀察症狀有否改善，好轉後再補充複合碳水化合物（如餅乾、三文治）。【嚴格禁忌】若傷者神志不清無法吞嚥或已昏迷，絕對不可餵食任何液體或糖果（防窒息），應置於復原臥式並立即致電 999。"
+            },
+            {
+                id: "MED_17",
+                category: "代謝與內分泌急症",
+                name: "高血糖症 / 糖尿病酮酸中毒 (Hyperglycaemia / DKA)",
+                ageRange: [18, 75],
+                avpu: "V / P（漸進式嗜睡、反應極度遲鈍，甚至昏迷）",
+                pulse: "過快且微弱（118–134 次/分，嚴重脫水）",
+                resp: "深而急促（庫斯莫爾呼吸 Kussmaul Breathing：26–32 次/分），呼氣帶「爛蘋果（丙酮）」甜味",
+                bp: "偏低（88/54 mmHg，脫水導致低血容量）",
+                spo2: "96% – 98%",
+                skinTemp: "37.4°C｜皮膚極度乾燥、溫暖潮紅、眼球凹陷、口唇乾裂",
+                pupils: "雙側等大，反應遲緩",
+                scenes: [
+                    { loc: "深水埗獨居長者公屋單位", weather: "室內環境，氣溫 26°C", hazard: "現場安全，桌上發現未使用完的胰島素筆" },
+                    { loc: "大學宿舍房間", weather: "室內冷氣環境，氣溫 23°C", hazard: "環境安全" }
+                ],
+                narrative: "傷病者有糖尿病史，近兩日因患上腸胃炎而自行停用胰島素，期間極度口渴、頻尿及反覆嘔吐腹痛。今日室友發現他昏睡在床上難以喚醒，呼吸又深又快，房間內隱約聞到一股甜酸的水果氣味。",
+                assessment: "嚴重缺乏胰島素導致血糖極高及酮酸中毒（漸進式惡化，需醫院靜脈輸液及胰島素治療）。注意與低血糖區分：高血糖者皮膚「乾燥」且呼吸帶「酮味」。急救員不可替傷者注射胰島素（劑量不當極危險）；維持氣道暢通（若昏迷置於復原臥式）、若有嘔吐物及時清理，立即致電 999 緊急送院。"
+            },
+            {
+                id: "MED_18",
+                category: "環境與溫度急症",
+                name: "熱衰竭 (Heat Exhaustion)",
+                ageRange: [18, 65],
+                avpu: "A（清醒但極度疲憊、頭暈頭痛、噁心作嘔）",
+                pulse: "過快且微弱（114–128 次/分）",
+                resp: "急促且淺（22–26 次/分）",
+                bp: "正常或偏低（站立時易頭暈，如 96/60 mmHg）",
+                spo2: "97%（正常）",
+                skinTemp: "38.2°C｜面色蒼白、皮膚濕冷、大汗淋漓（仍有出汗功能！）",
+                pupils: "雙側等大圓形，對光有反應",
+                scenes: [
+                    { loc: "八仙嶺自然教育徑無遮蔭路段", weather: "酷熱天氣警告生效，氣溫 33°C，濕度 82%", hazard: "山路無遮蔭，需立即轉移至樹蔭或涼亭" },
+                    { loc: "啟德體育園戶外地盤", weather: "酷熱天氣警告生效，氣溫 34°C，陽光猛烈", hazard: "現場安全，有工友協助遮蔭" }
+                ],
+                narrative: "傷病者在酷熱天氣下行山超過 3 小時，大量出汗且飲水不足，剛才感到劇烈頭暈、作嘔、小腿肌肉抽筋及全身乏力。你觸摸其皮膚發現濕冷並布滿汗水，神志仍算清醒。",
+                assessment: "體液及電解質大量流失（若不及時處理會惡化為致命的中暑！）。立即將傷者移至陰涼處或冷氣房間；讓其平臥並抬高雙腿；解開多餘衣物，用濕涼毛巾抹身、扇風降溫；因傷者仍完全清醒，可讓其慢慢小口飲用清涼的電解質飲料或淡鹽水；若 30 分鐘內無改善或出現神志不清，立即致電 999。"
+            },
+            {
+                id: "MED_19",
+                category: "環境與溫度急症",
+                name: "中暑 (Heatstroke – 致命急症)",
+                ageRange: [20, 75],
+                avpu: "V / P / U（神志混亂、胡言亂語、抽搐甚至昏迷）",
+                pulse: "極快且強而有力，後期轉微弱（136–155 次/分）",
+                resp: "急促且淺（28–34 次/分）",
+                bp: "早期正常或偏高，後期急劇下降（如 84/50 mmHg）",
+                spo2: "93% – 96%",
+                skinTemp: "40.8°C｜【關鍵特徵】皮膚異常乾熱潮紅、停止出汗",
+                pupils: "雙側等大（昏迷時可能散大）",
+                scenes: [
+                    { loc: "大帽山麥理浩徑無遮蔭山坡", weather: "酷熱天氣警告生效，氣溫 34°C，濕度 85%，無風", hazard: "遠離車路，需立即致電 999 要求山嶺搜救支援並全力就地降溫" },
+                    { loc: "粉嶺鐵皮屋頂維修工程現場", weather: "酷熱天氣警告生效，氣溫 35°C", hazard: "屋頂高溫危險，需先將傷者安全移至地面陰涼通風處" }
+                ],
+                narrative: "傷病者在烈日暴曬下工作多時，突然行為怪異、說話語無倫次，隨即步伐不穩跌倒昏迷。觸摸其皮膚發現燙手且異常乾燥無汗，面色潮紅。",
+                assessment: "體溫調節中樞完全衰竭（核心體溫 > 40°C，死亡率極高！）。【首要任務：分秒必爭降溫，同時致電 999！】將傷者移至陰涼處，脫去外衣；用大量冷水淋身或不斷以濕冷毛巾擦拭全身並全力扇風，在頸側、腋下及腹股溝放置包裹好的冰袋（目標將體溫降至約 38°C）；因神志不清【切勿餵水】，若昏迷則置於復原臥式並密切監察呼吸。"
+            },
+            {
+                id: "MED_20",
+                category: "環境與溫度急症",
+                name: "低溫症 (Hypothermia)",
+                ageRange: [22, 85],
+                avpu: "A → V → U（初時劇烈顫抖、說話含糊、動作笨拙；重度時停止顫抖並昏迷）",
+                pulse: "異常減慢且微弱（42–54 次/分，心臟極易受刺激致心室顫動）",
+                resp: "淺而緩慢（8–12 次/分）",
+                bp: "偏低（86/52 mmHg）",
+                spo2: "90% – 94%（末梢血管收縮，血氧機讀數可能偏低）",
+                skinTemp: "33.8°C｜全身皮膚蒼白冰冷（如大理石般冷），嘴唇指甲發紫",
+                pupils: "雙側等大，對光反應遲緩",
+                scenes: [
+                    { loc: "大嶼山鳳凰山營地", weather: "寒冷天氣警告生效，氣溫 6°C，伴隨強風及微雨", hazard: "山區強風寒效應極強，必須先將傷者移入帳篷或避風處" },
+                    { loc: "新界北區村屋無暖氣睡房", weather: "寒流襲港，氣溫 8°C，濕度 88%", hazard: "長者衣物單薄受寒，環境安全" }
+                ],
+                narrative: "傷病者冬季行山遇上驟雨強風，衣物全濕卻無替換衣物。同行隊友發現他步伐蹣跚、說話含糊不清、拉鍊都拉不上，剛才連發抖也停止了，神情呆滯。",
+                assessment: "核心體溫低於 35°C。【關鍵原則：動作必須極度輕柔！】粗暴搬動或摩擦四肢會令冰冷血液湧回心臟引發致命心律不正！將傷者移入避風溫暖處，小心剪開並脫去濕冷衣物，用乾爽毛氈、睡袋及錫紙保溫氈包裹全身（包括頭部，但臉部外露）；若完全清醒可飲用溫熱甜飲（切勿飲酒或咖啡）；切勿直接用熱水袋或暖爐烘烤四肢；致電 999 送院。"
+            },
+            {
+                id: "MED_21",
+                category: "環境與溫度急症",
+                name: "凍傷 (Frostbite)",
+                ageRange: [20, 55],
+                avpu: "A（清醒，主訴受凍部位初期刺痛，後期完全麻木失去知覺）",
+                pulse: "正常或輕微加快（84–98 次/分）",
+                resp: "正常（16–18 次/分）",
+                bp: "正常（118/74 mmHg）",
+                spo2: "96% – 98%",
+                skinTemp: "35.9°C｜受凍手指/腳趾/耳廓皮膚蒼白蠟黃、觸感堅硬冰冷",
+                pupils: "雙側等大圓形，對光有反應",
+                scenes: [
+                    { loc: "境外雪山登山大本營（模擬外遊遠足隊）", weather: "暴風雪剛過，氣溫 -12°C，強風", hazard: "嚴寒環境，需確保營帳內避風並警惕同時出現低溫症" },
+                    { loc: "大型冷庫食品加工廠房", weather: "超低溫冷庫環境，氣溫 -18°C", hazard: "傷者已離開冷庫回到室溫休息室（20°C）" }
+                ],
+                narrative: "傷病者在極低溫環境下工作/登山時手套破損，暴露在外的右手手指先感到針刺般劇痛，隨後完全麻木失去知覺，手指皮膚變成蒼白蠟黃色且僵硬。",
+                assessment: "局部組織因極度嚴寒而凍結。【四大禁忌】1. 切勿揉搓或拍打受凍部位（冰晶會割傷細胞）；2. 切勿用明火、暖爐直接烘烤或用雪擦拭；3. 切勿刺穿解凍後出現的水泡；4. 若受凍部位有機會再次受凍，切勿在野外解凍！正確處理：移入溫暖室內，除下戒指手錶，可用身體體溫（如夾在腋下）或將傷處浸入 37–39°C 溫水中緩慢解凍約 20–30 分鐘，用無菌紗布分開指縫輕輕包紮，安排就醫。"
+            },
+            {
+                id: "MED_22",
+                category: "環境與溫度急症",
+                name: "急性高山症 (Acute Mountain Sickness, AMS)",
+                ageRange: [20, 60],
+                avpu: "A / V（劇烈頭痛、極度疲倦、嗜睡或煩躁，步伐不穩）",
+                pulse: "過快（112–126 次/分，低氧代償）",
+                resp: "急促（24–30 次/分）",
+                bp: "正常或輕微偏高（132/84 mmHg）",
+                spo2: "78% – 85%（高海拔低氧環境下血氧顯著下降）",
+                skinTemp: "36.3°C｜面色蒼白、嘴唇及指甲床發紺、手腳輕微水腫",
+                pupils: "雙側等大，對光有反應",
+                scenes: [
+                    { loc: "境外高海拔山區營地（海拔 3,900 米）", weather: "晴朗大風，氣溫 3°C，空氣稀薄乾燥", hazard: "高海拔低氧低溫環境，需注意保暖及隊伍安全" }
+                ],
+                narrative: "香港遠足隊員抵達海拔 3,900 米營地當晚，出現劇烈跳動性頭痛、噁心嘔吐、食慾全失及極度疲乏，剛才走出帳篷時步伐搖晃如醉酒（共濟失調）。",
+                assessment: "高海拔低氧導致腦部及肺部輕度水腫（若出現步履不穩或咳粉紅泡沫痰則已惡化為致命的高海拔腦水腫 HACE 或肺水腫 HAPE！）。【黃金法則：立即下撤至低海拔處！】停止繼續攀升，在有人攙扶下立即下降至少 500–1,000 米高度；若有便攜式氧氣瓶則給予吸氧；保持溫暖休息、補充水分（切勿飲酒或服安眠藥），下撤後求醫。"
+            },
+            {
+                id: "MED_23",
+                category: "中毒與藥物過量",
+                name: "一氧化碳中毒 (Carbon Monoxide Poisoning)",
+                ageRange: [18, 70],
+                avpu: "V / U（劇烈頭痛、頭暈作嘔、神志迷糊甚至昏迷）",
+                pulse: "過快（118–134 次/分）",
+                resp: "急促費力（24–30 次/分）",
+                bp: "偏低（90/56 mmHg）",
+                spo2: "【陷阱】普通血氧機可能顯示 97%–99% 假性正常（無法分辨碳氧血紅蛋白！）",
+                skinTemp: "36.6°C｜面色潮紅（典型呈「櫻桃紅色」但較少見，多數蒼白或發紺）",
+                pupils: "雙側等大，嚴重缺氧時散大",
+                scenes: [
+                    { loc: "緊閉門窗的唐樓浴室（使用無煙道熱水爐）", weather: "冬季陰冷，氣溫 13°C，浴室門窗緊閉", hazard: "【極度危險】室內積聚無色無味劇毒氣體，救援前必須先屏氣打開所有門窗通風或由消防員救出！" },
+                    { loc: "地下停車場密閉車廂內", weather: "室內環境，氣溫 24°C，車輛引擎仍在空轉", hazard: "需先打開車門通風並熄掉引擎，將傷者移至空氣清新處" }
+                ],
+                narrative: "傷病者在門窗緊閉的浴室內洗澡超過 40 分鐘未出來，家人破門發現他倒臥在地上神志不清、嘔吐大作，浴室內使用的舊式氣體熱水爐火苗呈異常黃色。",
+                assessment: "一氧化碳與血紅蛋白結合力比氧氣高 200 多倍，導致組織嚴重缺氧（切勿被血氧儀 98% 讀數誤導！）。首要確保自身安全：打開所有門窗通風，立即將傷者移離毒氣環境至空氣清新處；致電 999 緊急送院（需高濃度氧氣及高壓氧治療）；評估意識及呼吸，若昏迷有呼吸則置於復原臥式，無呼吸則立即 CPR。"
+            },
+            {
+                id: "MED_24",
+                category: "中毒與藥物過量",
+                name: "藥物 / 鴉片類或安眠藥過量中毒",
+                ageRange: [18, 65],
+                avpu: "P / U（深度昏睡、對聲音無反應、僅對痛楚有微弱反應或完全昏迷）",
+                pulse: "異常減慢且微弱（46–58 次/分）",
+                resp: "極度緩慢且淺（6–10 次/分，嚴重呼吸抑制！）",
+                bp: "顯著下降（82/48 mmHg）",
+                spo2: "84% – 90%（嚴重通氣不足致低血氧）",
+                skinTemp: "35.7°C｜面色蒼白、嘴唇發紺、皮膚濕冷",
+                pupils: "【典型徵象】鴉片類過量呈「雙側針孔樣瞳孔 (Pinpoint Pupils)」；安眠藥則雙側等大遲鈍",
+                scenes: [
+                    { loc: "油麻地賓館房間內", weather: "室內冷氣環境，氣溫 22°C", hazard: "地上散落空藥瓶及不明針筒，接近時極度小心避免被針刺傷！" },
+                    { loc: "家中睡房床邊", weather: "室內環境，氣溫 24°C", hazard: "床頭櫃放有大量安眠藥及鎮靜劑空排裝" }
+                ],
+                narrative: "清潔工發現房客昏迷倒臥在床邊，叫喚全無反應，呼吸極度微弱緩慢（每分鐘僅約 8 次），嘴唇發紫，身旁地上散落多個鎮靜劑藥瓶，雙眼瞳孔縮得像針孔般細小。",
+                assessment: "中樞神經系統受嚴重抑制導致致命性呼吸衰竭。確保現場無尖銳針筒危險（佩戴手套）；立即致電 999，並保留現場所有藥瓶、藥袋或嘔吐物樣本交予救護員化驗；【切勿強行催吐】（昏迷者催吐極易吸入嘔吐物窒息）；若仍有微弱呼吸，立即置於復原臥式並密切監察呼吸次數，一旦呼吸停止或低於正常節奏立即施行 CPR。"
+            }
+        ];
+
+        // 表四：簡單級別專用資料庫（僅限一般出血傷口消毒包紮 & 非複雜性閉合性骨折固定）
+        const SIMPLE_CASES_DATA = [
+            {
+                id: "SIM_BLEED_01",
+                subType: "一般出血處理（消毒與敷料包紮）",
+                moiType: "直接暴力 / 表面割傷",
+                region: "上肢部位",
+                partName: "前臂與腕部",
+                partDetail: "前臂背側軟組織（無肌腱或大動脈受損）",
+                ageRange: [16, 60],
+                scenes: [
+                    { loc: "九龍灣辦公室茶水間", weather: "室內冷氣環境，氣溫 23°C", hazard: "地上有已清理的碎玻璃杯，環境安全" },
+                    { loc: "家中客廳", weather: "室內環境，氣溫 24°C", hazard: "現場光線充足，無即時危險" }
+                ],
+                narrative: "傷者清洗玻璃杯時不慎滑手，杯緣割傷前臂背側，造成一道約 4 厘米長的淺表割傷。傷口正緩慢滲出暗紅色血液，無異物嵌塞，手指活動及感覺完全正常。",
+                vitals: {
+                    avpu: "A – 完全清醒",
+                    avpuDesc: "神志清醒，對答如流，僅因流血略感緊張",
+                    pulse: "86 次/分鐘",
+                    pulseDesc: "正常範圍，節律整齊有力",
+                    resp: "16 次/分鐘",
+                    respDesc: "呼吸平穩正常",
+                    bp: "118 / 74 mmHg",
+                    bpDesc: "正常血壓（無休克徵象）",
+                    spo2: "99%",
+                    spo2Desc: "完全正常",
+                    skinTemp: "36.6°C｜面色紅潤、皮膚溫暖乾爽",
+                    pupils: "瞳孔：雙側等大圓形，對光反應正常"
+                },
+                diagnosis: "前臂淺表割傷伴一般靜脈/微絲血管出血（簡單級別）",
+                anatomy: "受創部位：上肢部位 > 前臂與腕部（淺表皮膚及皮下組織損傷，無深層神經血管受損）",
+                treatment: "1. 佩戴一次性醫用防護手套（保障個人衛生安全）。\n2. 讓傷者坐下，抬高受傷前臂至高於心臟水平。\n3. 清潔與消毒：使用生理鹽水或消毒藥水棉球，由傷口中心向外打圈抹拭清潔周圍皮膚（每顆棉球只抹一次）。\n4. 止血與包紮：以無菌紗布敷料覆蓋傷口並施加直接壓力止血，隨後用卷軸繃帶（螺旋形或人字形包紮）或三角巾摺成窄帶妥善包紮固定，末端打平結。\n5. 檢查手指末梢血液循環（按壓指甲床觀察微絲血管充盈時間）及活動感覺，確保包紮不過緊。",
+                checklist: [
+                    "確認現場環境安全，並正確佩戴一次性防護手套",
+                    "讓傷者坐下並抬高受傷前臂以協助減緩出血",
+                    "正確執行傷口清潔與消毒（由內向外單向抹拭，避免交叉污染）",
+                    "選用合適無菌敷料直接壓迫止血，並以繃帶妥善包紮（鬆緊適中、平結固定）",
+                    "包紮後檢查傷肢遠端血液循環（指端溫度/顏色）及感覺，給予適當安撫"
+                ]
+            },
+            {
+                id: "SIM_BLEED_02",
+                subType: "一般出血處理（擦傷清潔與包紮）",
+                moiType: "剪切力 / 跌倒擦傷",
+                region: "下肢部位",
+                partName: "大腿與膝部",
+                partDetail: "膝蓋前方表皮擦傷（髕骨前方軟組織）",
+                ageRange: [12, 55],
+                scenes: [
+                    { loc: "維多利亞公園緩跑徑旁草地", weather: "晴朗微風，氣溫 25°C", hazard: "已扶傷者坐於路旁長椅，遠離跑道" },
+                    { loc: "學校操場跑道邊", weather: "多雲清涼，氣溫 22°C", hazard: "環境安全，無障礙物" }
+                ],
+                narrative: "傷者慢跑時不慎被鞋帶絆倒向前仆倒，雙手及右膝蓋擦過地面，導致右膝蓋前方出現一片約 5×5 厘米的表皮擦傷，表面沾有少許塵土並有微絲血管滲血，膝關節仍可正常屈伸。",
+                vitals: {
+                    avpu: "A – 完全清醒",
+                    avpuDesc: "完全清醒，主訴膝蓋表皮火辣刺痛",
+                    pulse: "92 次/分鐘",
+                    pulseDesc: "正常範圍（剛停止跑步及輕微痛楚）",
+                    resp: "18 次/分鐘",
+                    respDesc: "平穩正常",
+                    bp: "120 / 76 mmHg",
+                    bpDesc: "正常血壓",
+                    spo2: "98%",
+                    spo2Desc: "完全正常",
+                    skinTemp: "36.7°C｜皮膚溫暖、額頭微汗",
+                    pupils: "瞳孔：雙側等大圓形，對光反應正常"
+                },
+                diagnosis: "右膝部表皮擦傷伴輕微滲血（簡單級別）",
+                anatomy: "受創部位：下肢部位 > 大腿與膝部（表皮及真皮淺層擦損，膝關節結構完整）",
+                treatment: "1. 佩戴防護手套，讓傷者坐下伸直腿部。\n2. 清潔與消毒：先用大量流動清水或生理鹽水沖洗傷口表面的沙塵碎屑，再用消毒藥水由傷口內側向外圍清潔消毒。\n3. 敷料與包紮：用無菌不黏性敷料覆蓋擦傷面，使用彈性繃帶（8字形包紮法）或三角巾摺成寬帶固定於膝部（注意包紮時膝關節保持微屈約 10–15 度以利舒適）。\n4. 檢查足背動脈或腳趾血液循環，提醒傷者保持敷料乾爽及定期更換。",
+                checklist: [
+                    "評估現場安全並佩戴一次性防護手套",
+                    "先以清水/生理鹽水沖去表面沙塵，再由內向外消毒傷口周圍",
+                    "選用無菌不黏性敷料完整覆蓋擦傷面並輕壓止血",
+                    "運用適當包紮技巧（如膝部8字形繃帶或三角巾寬帶）固定敷料",
+                    "檢查足部末梢血液循環及告知傷口護理注意事項"
+                ]
+            },
+            {
+                id: "SIM_BLEED_03",
+                subType: "一般出血處理（手部/手掌裂傷包紮）",
+                moiType: "直接暴力 / 鈍物擦裂",
+                region: "上肢部位",
+                partName: "手部",
+                partDetail: "手掌魚際肌表面淺層裂傷（無異物殘留）",
+                ageRange: [18, 65],
+                scenes: [
+                    { loc: "社區中心手工藝活動室", weather: "室內冷氣環境，氣溫 23°C", hazard: "已收起桌上美工工具，環境安全" },
+                    { loc: "荃灣屋苑平台花園", weather: "晴天，氣溫 26°C", hazard: "環境安全" }
+                ],
+                narrative: "傷者整理木箱邊緣時不慎被木刺刮傷右手手掌，造成一道約 3 厘米淺層裂傷，木刺已完全帶出無殘留，傷口有中度滲血，五指均能正常屈伸。",
+                vitals: {
+                    avpu: "A – 完全清醒",
+                    avpuDesc: "神志清醒，配合急救員處理",
+                    pulse: "84 次/分鐘",
+                    pulseDesc: "正常規則",
+                    resp: "16 次/分鐘",
+                    respDesc: "正常平穩",
+                    bp: "116 / 72 mmHg",
+                    bpDesc: "正常血壓",
+                    spo2: "99%",
+                    spo2Desc: "完全正常",
+                    skinTemp: "36.5°C｜面色正常、皮膚溫暖",
+                    pupils: "瞳孔：雙側等大圓形，對光反應正常"
+                },
+                diagnosis: "右手掌淺表裂傷伴一般出血（簡單級別）",
+                anatomy: "受創部位：上肢部位 > 手部（手掌淺層軟組織裂傷）",
+                treatment: "1. 佩戴防護手套，讓傷者坐下並抬高右手。\n2. 清潔與消毒：用生理鹽水沖洗傷口，並以消毒藥水由傷口中心向外圍抹拭消毒。\n3. 止血與手部包紮：將無菌敷料墊置於手掌傷口上，讓傷者五指微曲握住一卷乾淨紗布（保持手部功能位），用卷軸繃帶作手部8字形包紮，或使用三角巾作手部包紮法固定。\n4. 露出指尖以便觀察末梢血液循環及溫度，包紮後可用三角巾作大手掛承托以減少腫脹。",
+                checklist: [
+                    "確認環境安全並佩戴一次性防護手套",
+                    "抬高受傷手部並由內向外正確消毒傷口",
+                    "以無菌敷料覆蓋傷口並保持手部自然功能位進行壓迫止血",
+                    "使用繃帶（手部8字形）或三角巾妥善包紮，露出指尖方便觀察",
+                    "檢查指尖末梢循環（微絲血管充盈）及完成後給予承托安撫"
+                ]
+            },
+            {
+                id: "SIM_FRAC_01",
+                subType: "非複雜性閉合骨折（上肢承托與固定）",
+                moiType: "間接暴力 / 跌倒撐地",
+                region: "上肢部位",
+                partName: "前臂與腕部",
+                partDetail: "前臂遠端（橈骨/尺骨）非複雜性閉合性骨折",
+                ageRange: [15, 65],
+                scenes: [
+                    { loc: "沙田公園單車徑旁休息區", weather: "多雲清涼，氣溫 22°C", hazard: "已移離單車徑主道，現場安全" },
+                    { loc: "九龍塘商場室內走廊", weather: "室內冷氣環境，氣溫 22°C", hazard: "地面乾爽，保安員已協助維持秩序" }
+                ],
+                narrative: "傷者步行時不慎滑倒，以左手手掌撐地緩衝，隨即感到左前臂近手腕處劇痛及局部腫脹。皮膚完整無破口出血，無嚴重畸形，傷者正用右手小心托住左前臂。",
+                vitals: {
+                    avpu: "A – 完全清醒",
+                    avpuDesc: "神志完全清醒，主訴左前臂移動時疼痛",
+                    pulse: "94 次/分鐘",
+                    pulseDesc: "略快（因疼痛刺激），節律規則",
+                    resp: "18 次/分鐘",
+                    respDesc: "正常平穩",
+                    bp: "124 / 78 mmHg",
+                    bpDesc: "正常血壓",
+                    spo2: "98%",
+                    spo2Desc: "完全正常",
+                    skinTemp: "36.6°C｜面色正常、皮膚溫暖",
+                    pupils: "瞳孔：雙側等大圓形，對光反應正常"
+                },
+                diagnosis: "左前臂遠端非複雜性閉合性骨折（簡單級別）",
+                anatomy: "受創部位：上肢部位 > 前臂與腕部（橈骨/尺骨閉合性骨折，無神經血管壓迫或開放性傷口）",
+                treatment: "1. 佩戴手套，安撫傷者並讓其坐下，協助其繼續托穩傷肢。\n2. 除下傷側手腕上的手錶、手鍊或戒指（預防腫脹後緊箍阻礙血液循環）。\n3. 檢查固定前遠端脈搏（橈動脈）、手指溫度及活動感覺（PMS 檢查）。\n4. 承托與固定：使用軟墊夾板（或折疊雜誌/軟墊）承托前臂，再用三角巾製作「大手掛 (Arm Sling)」將前臂水平承托於胸前，打平結於健側頸窩，並可用寬帶將傷肢連同軀幹進一步固定。\n5. 固定後再次檢查手指遠端血液循環及感覺，安排送院作 X 光檢查。",
+                checklist: [
+                    "評估現場安全並佩戴防護手套，安撫傷者不要移動傷肢",
+                    "及時協助除下傷肢手錶、手鍊或戒指以防腫脹受壓",
+                    "固定前檢查傷肢遠端脈搏、手指溫度及感覺（PMS評估）",
+                    "正確使用軟墊承托及三角巾「大手掛」妥善固定前臂（平結位置正確）",
+                    "固定後覆檢手指末梢血液循環及感覺，確保固定穩妥且不過緊"
+                ]
+            },
+            {
+                id: "SIM_FRAC_02",
+                subType: "非複雜性閉合骨折（鎖骨/肩部三角巾固定）",
+                moiType: "間接暴力 / 側肩著地",
+                region: "頸部與軀幹",
+                partName: "胸部",
+                partDetail: "右側鎖骨中段非複雜性閉合性骨折",
+                ageRange: [16, 55],
+                scenes: [
+                    { loc: "旺角室內體育館場邊", weather: "室內冷氣環境，氣溫 23°C", hazard: "場地空曠安全" },
+                    { loc: "大埔海濱公園草地", weather: "晴天微風，氣溫 24°C", hazard: "環境安全" }
+                ],
+                narrative: "傷者進行運動時失平衡側身跌倒，右肩直接著地，隨即感到右鎖骨位置劇烈疼痛，右肩略為下垂，頭部微向右側傾斜以減輕痛楚。局部有輕微腫脹壓痛，皮膚完整無破損。",
+                vitals: {
+                    avpu: "A – 完全清醒",
+                    avpuDesc: "神志清醒，左手托著右手肘部",
+                    pulse: "96 次/分鐘",
+                    pulseDesc: "輕微加快（疼痛反應），規則有力",
+                    resp: "18 次/分鐘",
+                    respDesc: "正常平穩，無呼吸困難",
+                    bp: "126 / 78 mmHg",
+                    bpDesc: "正常血壓",
+                    spo2: "98%",
+                    spo2Desc: "完全正常",
+                    skinTemp: "36.6°C｜皮膚正常溫暖",
+                    pupils: "瞳孔：雙側等大圓形，對光反應正常"
+                },
+                diagnosis: "右側鎖骨非複雜性閉合性骨折（簡單級別）",
+                anatomy: "受創部位：頸部與軀幹 > 胸部（鎖骨閉合性骨折，無氣胸或大血管受損）",
+                treatment: "1. 佩戴手套，讓傷者坐下，在右側腋下放置一塊折疊好的軟墊（避免骨端重疊及減輕不適）。\n2. 除下右手戒指或手錶，檢查右側橈動脈脈搏及手指感覺。\n3. 固定方法：將傷者右上臂斜放於胸前（指尖指向左肩），使用三角巾製作「三角手掛 / 托肘懸臂帶 (Elevation Sling)」承托右前臂及手肘，再用一條三角巾摺成寬帶繞過胸廓將上臂與軀幹穩固綁緊（避開骨折處）。\n4. 固定後覆檢右手指尖血液循環及感覺，安排送院治療。",
+                checklist: [
+                    "確認現場安全並佩戴防護手套，讓傷者採取舒適坐姿",
+                    "除下傷側手部飾物，並在傷側腋下墊入軟墊以承托肩部",
+                    "固定前檢查傷肢遠端脈搏（橈動脈）及手指感覺",
+                    "正確使用三角巾製作「托肘懸臂帶（Elevation Sling）」並加寬帶固定於胸前",
+                    "固定後再次檢查指端血液循環，確認包紮穩固且不妨礙呼吸"
+                ]
+            },
+            {
+                id: "SIM_FRAC_03",
+                subType: "非複雜性閉合骨折（小腿/踝部夾板固定）",
+                moiType: "扭轉力 / 踏空扭跌",
+                region: "下肢部位",
+                partName: "小腿",
+                partDetail: "右小腿遠端（腓骨/外踝）非複雜性閉合性骨折",
+                ageRange: [18, 60],
+                scenes: [
+                    { loc: "尖沙咀文化中心露天廣場台階旁", weather: "多雲，氣溫 23°C", hazard: "已扶傷者坐於台階旁安全位置" },
+                    { loc: "荃灣室內運動場", weather: "室內冷氣環境，氣溫 22°C", hazard: "環境安全" }
+                ],
+                narrative: "傷者下台階時不慎踏空扭傷右腳踝及小腿下方，聽到輕微聲響並感到右小腿外側下方劇痛，局部迅速腫脹瘀青，無法站立負重。皮膚完整無傷口，腳趾溫暖可輕微活動。",
+                vitals: {
+                    avpu: "A – 完全清醒",
+                    avpuDesc: "神志清醒，坐於地上雙手扶著右腿",
+                    pulse: "90 次/分鐘",
+                    pulseDesc: "正常範圍，節律規則",
+                    resp: "16 次/分鐘",
+                    respDesc: "正常平穩",
+                    bp: "122 / 76 mmHg",
+                    bpDesc: "正常血壓",
+                    spo2: "99%",
+                    spo2Desc: "完全正常",
+                    skinTemp: "36.5°C｜面色正常、皮膚溫暖",
+                    pupils: "瞳孔：雙側等大圓形，對光反應正常"
+                },
+                diagnosis: "右小腿遠端/踝部非複雜性閉合性骨折（簡單級別）",
+                anatomy: "受創部位：下肢部位 > 小腿（腓骨遠端/踝部閉合性骨折，遠端血運良好）",
+                treatment: "1. 佩戴手套，叮囑傷者切勿嘗試站立或行走，就地坐臥休息。\n2. 檢查腳趾末梢血液循環、溫度及感覺（PMS 檢查）；若鞋履未造成壓迫可暫時保留作自然夾板，或小心鬆開鞋帶減壓。\n3. 固定方法：在雙腿膝關節及踝關節之間墊入軟墊（毛巾或衣物），使用軟墊夾板（或利用健側左腿作天然夾板），以三角巾摺成寬帶（8字形固定足踝，再分別於膝下及大腿處打平結固定，避開骨折正上方）。\n4. 固定後再次檢查腳趾血液循環，並安排送院診治。",
+                checklist: [
+                    "評估現場安全並佩戴防護手套，制止傷者負重移動",
+                    "固定前檢查傷足腳趾溫度、顏色及感覺（PMS評估）",
+                    "在雙腿骨突處（膝部、踝部）墊入軟墊以減少摩擦與壓痛",
+                    "正確運用夾板或健肢固定法（8字形固定足踝及上下關節，避開傷處打結）",
+                    "固定後覆檢腳趾末梢血液循環，確認固定穩妥不過緊"
+                ]
+            }
+        ];
+
+        // =========================================================================
+        // 2. 狀態管理與輔助工具
+        // =========================================================================
+        let caseHistory = [];
+        let currentCaseIndex = -1;
+        let showHints = false;
+        let showAnswer = false;
+
+        // 計時系統狀態
+        let timerVisible = false;
+        let timerMode = "COUNTDOWN"; // "COUNTDOWN" | "STOPWATCH"
+        let timerRunning = false;
+        let timerInterval = null;
+        let countdownTotalSeconds = 300; // 預設 5 分鐘
+        let remainingSeconds = 300;
+        let elapsedSeconds = 0;
+
+        // 初始化頁面
+        window.onload = function() {
+            updateConditionDropdown();
+            generateNewCase();
+        };
+
+        // -------------------------------------------------------------------------
+        // 計時系統核心控制函數
+        // -------------------------------------------------------------------------
+        function toggleTimerVisibility() {
+            timerVisible = !timerVisible;
+            const panel = document.getElementById("timerPanel");
+            const statusText = document.getElementById("headerTimerStatus");
+            const btn = document.getElementById("btnHeaderTimer");
+
+            if (timerVisible) {
+                panel.classList.remove("hidden");
+                statusText.textContent = "計時系統：開啟";
+                btn.classList.add("border-teal-500", "text-teal-300");
+                updateElapsedBadge();
+            } else {
+                panel.classList.add("hidden");
+                statusText.textContent = "計時系統：關閉";
+                btn.classList.remove("border-teal-500", "text-teal-300");
+                if (timerRunning) startPauseTimer(); // 關閉時自動暫停
+                updateElapsedBadge();
+            }
+        }
+
+        function setTimerMode(mode) {
+            if (timerRunning) startPauseTimer();
+            timerMode = mode;
+            const btnCd = document.getElementById("modeCountdownBtn");
+            const btnSw = document.getElementById("modeStopwatchBtn");
+            const presets = document.getElementById("countdownPresets");
+
+            if (mode === "COUNTDOWN") {
+                btnCd.className = "text-xs font-bold px-2.5 py-1 rounded-lg bg-teal-500 text-slate-950 transition";
+                btnSw.className = "text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition";
+                presets.classList.remove("hidden");
+            } else {
+                btnSw.className = "text-xs font-bold px-2.5 py-1 rounded-lg bg-teal-500 text-slate-950 transition";
+                btnCd.className = "text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition";
+                presets.classList.add("hidden");
+            }
+            resetTimer();
+        }
+
+        function setCountdownMinutes(mins) {
+            if (timerRunning) startPauseTimer();
+            countdownTotalSeconds = mins * 60;
+            remainingSeconds = countdownTotalSeconds;
+            elapsedSeconds = 0;
+            updateTimerDisplay();
+            updateElapsedBadge();
+        }
+
+        function applyCustomMinutes() {
+            const val = parseInt(document.getElementById("customMinutesInput").value, 10);
+            if (isNaN(val) || val < 1 || val > 60) {
+                showToast("請輸入 1 至 60 之間的分鐘數", "⚠️");
+                return;
+            }
+            setCountdownMinutes(val);
+            showToast(`已設定倒數時間為 ${val} 分鐘`, "⏱️");
+        }
+
+        function formatSeconds(sec) {
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+        }
+
+        function updateTimerDisplay() {
+            const display = document.getElementById("timerDisplay");
+            const box = document.getElementById("timerDisplayBox");
+            const secToShow = timerMode === "COUNTDOWN" ? remainingSeconds : elapsedSeconds;
+            display.textContent = formatSeconds(secToShow);
+
+            if (timerMode === "COUNTDOWN" && remainingSeconds <= 30 && remainingSeconds > 0) {
+                display.className = "text-3xl sm:text-4xl font-black font-mono tracking-wider text-amber-400 animate-pulse";
+            } else if (timerMode === "COUNTDOWN" && remainingSeconds === 0) {
+                display.className = "text-3xl sm:text-4xl font-black font-mono tracking-wider text-red-500";
+                box.classList.add("border-red-500");
+            } else {
+                display.className = "text-3xl sm:text-4xl font-black font-mono tracking-wider text-teal-400";
+                box.classList.remove("border-red-500");
+            }
+        }
+
+        function updateElapsedBadge() {
+            const badge = document.getElementById("assessmentElapsedBadge");
+            if (!badge) return;
+            if (!timerVisible && elapsedSeconds === 0) {
+                badge.textContent = "⏱️ 實操耗時：未啟用計時";
+            } else {
+                badge.textContent = `⏱️ 實操耗時：${formatSeconds(elapsedSeconds)}`;
+            }
+        }
+
+        function playBeepAlert() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.25, 0.5].forEach(delay => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.setValueAtTime(880, ctx.currentTime + delay);
+                    gain.gain.setValueAtTime(0.2, ctx.currentTime + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + delay);
+                    osc.stop(ctx.currentTime + delay + 0.2);
+                });
+            } catch (e) {
+                // 忽略瀏覽器音效權限限制
+            }
+        }
+
+        function startPauseTimer() {
+            const btn = document.getElementById("btnTimerStartPause");
+            const badge = document.getElementById("timerStateBadge");
+
+            if (timerRunning) {
+                clearInterval(timerInterval);
+                timerRunning = false;
+                btn.innerHTML = '<span>▶️</span><span>繼續計時</span>';
+                btn.className = "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm";
+                badge.textContent = "已暫停";
+                badge.className = "text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300";
+            } else {
+                if (timerMode === "COUNTDOWN" && remainingSeconds === 0) {
+                    remainingSeconds = countdownTotalSeconds;
+                    elapsedSeconds = 0;
+                }
+                timerRunning = true;
+                btn.innerHTML = '<span>⏸️</span><span>暫停計時</span>';
+                btn.className = "bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm";
+                badge.textContent = "計時中";
+                badge.className = "text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300";
+
+                timerInterval = setInterval(() => {
+                    elapsedSeconds++;
+                    updateElapsedBadge();
+                    if (timerMode === "COUNTDOWN") {
+                        if (remainingSeconds > 0) {
+                            remainingSeconds--;
+                            updateTimerDisplay();
+                            if (remainingSeconds === 0) {
+                                clearInterval(timerInterval);
+                                timerRunning = false;
+                                btn.innerHTML = '<span>▶️</span><span>重新開始</span>';
+                                btn.className = "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm";
+                                badge.textContent = "時間到！";
+                                badge.className = "text-[11px] font-bold px-2 py-0.5 rounded bg-red-500/30 text-red-300";
+                                playBeepAlert();
+                                showToast("⏰ 模擬實操時間已到！請停止操作並進行導師檢討。", "⏰");
+                            }
+                        }
+                    } else {
+                        updateTimerDisplay();
+                    }
+                }, 1000);
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            remainingSeconds = countdownTotalSeconds;
+            elapsedSeconds = 0;
+            updateTimerDisplay();
+            updateElapsedBadge();
+
+            const btn = document.getElementById("btnTimerStartPause");
+            const badge = document.getElementById("timerStateBadge");
+            btn.innerHTML = '<span>▶️</span><span>開始計時</span>';
+            btn.className = "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm";
+            badge.textContent = "待機中";
+            badge.className = "text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400";
+        }
+
+        // 當難度改變時自動聯動篩選選單
+        function onDifficultyChange() {
+            const diff = document.getElementById("filterDifficulty").value;
+            const modeSelect = document.getElementById("filterMode");
+            if (diff === "SIMPLE") {
+                modeSelect.value = "TRAUMA";
+            }
+            updateConditionDropdown();
+        }
+
+        // 隨機整數工具
+        function randInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // 隨機陣列抽樣
+        function randPick(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        // 根據個案類別更新「指定考題主題」下拉選單
+        function updateConditionDropdown() {
+            const diff = document.getElementById("filterDifficulty").value;
+            const mode = document.getElementById("filterMode").value;
+            const select = document.getElementById("filterCondition");
+            select.innerHTML = '<option value="RANDOM">🎲 隨機抽取任何傷病狀況</option>';
+
+            if (diff === "SIMPLE") {
+                const optGroupSimple = document.createElement("optgroup");
+                optGroupSimple.label = "🟢 簡單級別（基礎出血消毒包紮 / 非複雜性骨折固定）";
+                SIMPLE_CASES_DATA.forEach(s => {
+                    const opt = document.createElement("option");
+                    opt.value = s.id;
+                    opt.textContent = `[簡單] ${s.diagnosis.replace("（簡單級別）", "")}`;
+                    optGroupSimple.appendChild(opt);
+                });
+                select.appendChild(optGroupSimple);
+                return;
+            }
+
+            if (mode === "ALL" || mode === "TRAUMA") {
+                const optGroupTrauma = document.createElement("optgroup");
+                optGroupTrauma.label = "💥 創傷個案（按受傷機制分類）";
+                MOI_DATA.forEach(m => {
+                    const opt = document.createElement("option");
+                    opt.value = m.id;
+                    opt.textContent = `[創傷] ${m.type}`;
+                    optGroupTrauma.appendChild(opt);
+                });
+                select.appendChild(optGroupTrauma);
+            }
+
+            if (mode === "ALL" || mode === "MEDICAL") {
+                const optGroupMed = document.createElement("optgroup");
+                optGroupMed.label = "🩺 內科及環境急症（24種臨床診斷）";
+                MEDICAL_CONDITIONS_DATA.forEach(c => {
+                    const opt = document.createElement("option");
+                    opt.value = c.id;
+                    opt.textContent = `[${c.category}] ${c.name}`;
+                    optGroupMed.appendChild(opt);
+                });
+                select.appendChild(optGroupMed);
+            }
+        }
+
+        // =========================================================================
+        // 3. 個案生成核心引擎
+        // =========================================================================
+        function generateNewCase() {
+            const mode = document.getElementById("filterMode").value;
+            const diffSetting = document.getElementById("filterDifficulty").value;
+            const specificId = document.getElementById("filterCondition").value;
+
+            // 決定難度
+            const difficulty = diffSetting === "RANDOM" ? (Math.random() < 0.6 ? "BASIC" : "ADVANCED") : diffSetting;
+            const difficultyLabelMap = {
+                "SIMPLE": "簡單級別（基礎包紮與固定）",
+                "BASIC": "標準級別",
+                "ADVANCED": "進階級別（複合/隱匿徵象）"
+            };
+            const difficultyLabel = difficultyLabelMap[difficulty];
+
+            // 若計時器開啟中，生成新個案時自動重設計時器
+            if (timerVisible) {
+                resetTimer();
+            }
+
+            // 【分支 A：簡單級別 - 僅處理一般出血、消毒包紮、非複雜性閉合骨折】
+            if (difficulty === "SIMPLE" || specificId.startsWith("SIM_")) {
+                const simpleItem = specificId.startsWith("SIM_")
+                    ? SIMPLE_CASES_DATA.find(s => s.id === specificId)
+                    : randPick(SIMPLE_CASES_DATA);
+
+                const gender = Math.random() < 0.5 ? "男性" : "女性";
+                const age = randInt(simpleItem.ageRange[0], simpleItem.ageRange[1]);
+                const ageGroupText = age < 14 ? "青少年（適用標準包紮固定原則）" : "成年人（生命表徵穩定）";
+                const avatarEmoji = age < 14 ? (gender === "男性" ? "👦" : "👧") : (gender === "男性" ? "👨" : "👩");
+
+                const builds = ["中等身材，穿著日常便服", "身形標準，穿著運動服裝", "身形略瘦，穿著輕便休閒服"];
+                const companions = ["有朋友/同事在旁陪同", "有熱心途人協助照看", "神志清醒，能自行清楚描述經過"];
+                const scene = randPick(simpleItem.scenes);
+                const caseNum = caseHistory.length + 1;
+                const nowStr = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' });
+
+                const generatedCase = {
+                    caseNumber: caseNum,
+                    timestamp: nowStr,
+                    categoryTag: `簡單實操：${simpleItem.subType}`,
+                    difficultyTag: difficultyLabel,
+                    gender,
+                    age,
+                    ageGroupText,
+                    avatarEmoji,
+                    build: randPick(builds),
+                    companion: randPick(companions),
+                    location: scene.loc,
+                    weather: scene.weather,
+                    hazard: scene.hazard,
+                    moiTag: `受傷機制：${simpleItem.moiType}`,
+                    narrative: simpleItem.narrative,
+                    vitals: simpleItem.vitals,
+                    answer: {
+                        diagnosis: simpleItem.diagnosis,
+                        anatomy: simpleItem.anatomy,
+                        treatment: simpleItem.treatment,
+                        checklist: simpleItem.checklist
+                    }
+                };
+
+                caseHistory.unshift(generatedCase);
+                currentCaseIndex = 0;
+                updateHistoryUI();
+                renderCase(generatedCase);
+                if (showAnswer) toggleInstructorPanel();
+                return;
+            }
+
+            let isTrauma = false;
+            let selectedItem = null;
+
+            if (specificId !== "RANDOM") {
+                if (specificId.startsWith("MOI_")) {
+                    isTrauma = true;
+                    selectedItem = MOI_DATA.find(m => m.id === specificId);
+                } else {
+                    isTrauma = false;
+                    selectedItem = MEDICAL_CONDITIONS_DATA.find(c => c.id === specificId);
+                }
+            } else {
+                if (mode === "TRAUMA") {
+                    isTrauma = true;
+                } else if (mode === "MEDICAL") {
+                    isTrauma = false;
+                } else {
+                    isTrauma = Math.random() < 0.42; // 42% 創傷，58% 內科/環境
+                }
+                selectedItem = isTrauma ? randPick(MOI_DATA) : randPick(MEDICAL_CONDITIONS_DATA);
+            }
+
+            // 生成性別與合理年齡
+            const gender = Math.random() < 0.52 ? "男性" : "女性";
+            const age = randInt(selectedItem.ageRange[0], selectedItem.ageRange[1]);
+            const ageGroupText = age < 12 ? "兒童（請注意兒童生命表徵及CPR標準）" : (age >= 65 ? "長者（需留意慢性病史及骨質疏鬆風險）" : "成年人（適用成人急救標準）");
+            const avatarEmoji = age < 14 ? (gender === "男性" ? "👦" : "👧") : (age >= 65 ? (gender === "男性" ? "👴" : "👵") : (gender === "男性" ? "👨" : "👩"));
+
+            const builds = ["中等身材，穿著日常便服", "身形略胖，穿著工作服", "身形偏瘦，穿著運動服裝", "體格健碩，背著隨身背包"];
+            const companions = ["有同事/朋友在場目擊並協助報警", "有熱心途人在旁圍觀", "獨自一人，剛被路過人士發現", "有家人在旁陪伴，情緒較緊張"];
+
+            const scene = randPick(selectedItem.scenes);
+            const caseNum = caseHistory.length + 1;
+            const nowStr = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' });
+
+            let generatedCase = {};
+
+            if (isTrauma) {
+                // 抽取合理受傷部位（排除不合理搭配，如扭轉力主要集中於上下肢）
+                let eligibleRegions = ANATOMY_DATA;
+                if (selectedItem.id === "MOI_03") {
+                    eligibleRegions = ANATOMY_DATA.filter(r => r.region === "上肢部位" || r.region === "下肢部位");
+                }
+                const regionObj = randPick(eligibleRegions);
+                const partObj = randPick(regionObj.parts);
+
+                let narrative = randPick(selectedItem.narratives)
+                    .replace("{part}", `${regionObj.region}－${partObj.name}`)
+                    .replace("{detail}", partObj.detail);
+
+                // 進階難度加入複合傷勢或休克惡化提示
+                let extraAdvancedNote = "";
+                let pulseVal = randInt(selectedItem.vitalsProfile.pulse[0], selectedItem.vitalsProfile.pulse[1]);
+                let respVal = randInt(selectedItem.vitalsProfile.resp[0], selectedItem.vitalsProfile.resp[1]);
+                let bpText = selectedItem.vitalsProfile.bp[0];
+                let bpDesc = selectedItem.vitalsProfile.bp[1];
+                let skinText = selectedItem.vitalsProfile.skin[0];
+
+                if (difficulty === "ADVANCED") {
+                    pulseVal += 14;
+                    respVal += 4;
+                    bpText = "86/52 mmHg";
+                    bpDesc = "顯著下降（進階考點：傷者同時出現低血容量休克徵象！）";
+                    skinText = "35.9°C｜面色蒼白、皮膚濕冷冒汗";
+                    narrative += " 此外，你發現傷者開始感到異常口渴、焦躁不安，四肢末梢冰冷。";
+                    extraAdvancedNote = "\n【進階考點提示】除了處理局部創傷及固定外，傷者生命表徵已顯示進入「失代償期休克」，學員必須同時執行防休克措施（平臥、保暖、密切監察血壓脈搏）及優先召喚 999。";
+                }
+
+                generatedCase = {
+                    caseNumber: caseNum,
+                    timestamp: nowStr,
+                    categoryTag: "創傷個案 (Trauma)",
+                    difficultyTag: difficultyLabel,
+                    gender,
+                    age,
+                    ageGroupText,
+                    avatarEmoji,
+                    build: randPick(builds),
+                    companion: randPick(companions),
+                    location: scene.loc,
+                    weather: scene.weather,
+                    hazard: scene.hazard,
+                    moiTag: `受傷機制：${selectedItem.type}`,
+                    narrative,
+                    vitals: {
+                        avpu: selectedItem.vitalsProfile.avpu[0],
+                        avpuDesc: selectedItem.vitalsProfile.avpu[1],
+                        pulse: `${pulseVal} 次/分鐘`,
+                        pulseDesc: selectedItem.vitalsProfile.pulse[2],
+                        resp: `${respVal} 次/分鐘`,
+                        respDesc: selectedItem.vitalsProfile.resp[2],
+                        bp: bpText,
+                        bpDesc: bpDesc,
+                        spo2: selectedItem.vitalsProfile.spo2[0],
+                        spo2Desc: selectedItem.vitalsProfile.spo2[1],
+                        skinTemp: skinText,
+                        pupils: selectedItem.vitalsProfile.skin[1]
+                    },
+                    answer: {
+                        diagnosis: `${selectedItem.type} 導致 ${partObj.name} 損傷（${selectedItem.injuries}）`,
+                        anatomy: `受創區域：${regionObj.region} > ${partObj.name}（涵蓋構造：${partObj.detail}）｜機轉說明：${selectedItem.desc}`,
+                        treatment: selectedItem.firstAid + extraAdvancedNote,
+                        checklist: [
+                            "評估現場環境安全及佩戴個人防護裝備 (PPE/手套)",
+                            "檢查清醒程度及氣道呼吸 (DRSABCD)，視乎需要穩定頭頸椎",
+                            `正確識別「${selectedItem.type}」及受創部位（${partObj.name}）`,
+                            "執行針對性創傷急救（止血 / 妥善承托固定 / 保護嵌塞異物或降溫）",
+                            "預防休克（保暖、適當體位）、持續監察生命表徵並致電 999"
+                        ]
+                    }
+                };
+            } else {
+                // 內科及環境急症
+                let narrative = selectedItem.narrative;
+                let extraAdvancedNote = "";
+                let avpuMain = selectedItem.avpu.split("（")[0];
+                let avpuSub = selectedItem.avpu.includes("（") ? selectedItem.avpu.split("（")[1].replace("）", "") : "請持續評估意識變化";
+
+                if (difficulty === "ADVANCED") {
+                    narrative += " 現場目擊者提供資訊較混亂，傷者同時主訴胸口不適及頭暈，需靠生命表徵數據作出準確鑑別診斷。";
+                    extraAdvancedNote = "\n【進階考點提示】學員需透過對比血壓、脈搏、呼吸節律及皮膚乾濕度，排除其他相似急症（如區分低血糖與中風、中暑與熱衰竭、過度換氣與哮喘）。";
+                }
+
+                // 拆解數值與說明
+                const splitVital = (str) => {
+                    if (str.includes("（")) {
+                        const parts = str.split("（");
+                        return [parts[0].trim(), parts[1].replace("）", "").trim()];
+                    }
+                    return [str, "臨床觀察表徵"];
+                };
+
+                const [pMain, pSub] = splitVital(selectedItem.pulse);
+                const [rMain, rSub] = splitVital(selectedItem.resp);
+                const [bpMain, bpSub] = splitVital(selectedItem.bp);
+                const [sMain, sSub] = splitVital(selectedItem.spo2);
+
+                generatedCase = {
+                    caseNumber: caseNum,
+                    timestamp: nowStr,
+                    categoryTag: `內科/環境：${selectedItem.category}`,
+                    difficultyTag: difficultyLabel,
+                    gender,
+                    age,
+                    ageGroupText,
+                    avatarEmoji,
+                    build: randPick(builds),
+                    companion: randPick(companions),
+                    location: scene.loc,
+                    weather: scene.weather,
+                    hazard: scene.hazard,
+                    moiTag: `急症分類：${selectedItem.category}`,
+                    narrative,
+                    vitals: {
+                        avpu: avpuMain,
+                        avpuDesc: avpuSub,
+                        pulse: pMain,
+                        pulseDesc: pSub,
+                        resp: rMain,
+                        respDesc: rSub,
+                        bp: bpMain,
+                        bpDesc: bpSub,
+                        spo2: sMain,
+                        spo2Desc: sSub,
+                        skinTemp: selectedItem.skinTemp,
+                        pupils: `瞳孔：${selectedItem.pupils}`
+                    },
+                    answer: {
+                        diagnosis: selectedItem.name,
+                        anatomy: `系統分類：${selectedItem.category}｜關鍵鑑別指標：${selectedItem.skinTemp}；瞳孔${selectedItem.pupils}`,
+                        treatment: selectedItem.assessment + extraAdvancedNote,
+                        checklist: [
+                            "確保現場環境安全（如防電擊、防毒氣、防交通或高溫危險）並戴手套",
+                            "執行 DRSABCD 初步評估（檢查反應、氣道暢通及正常呼吸）",
+                            `準確判讀生命表徵並識別「${selectedItem.name}」`,
+                            "給予正確體位（如半坐臥 / 復原臥式 / 平臥抬腿）及針對性處置",
+                            "及時致電 999 召喚救護車（或取用 AED / EpiPen）並持續監察"
+                        ]
+                    }
+                };
+            }
+
+            // 儲存至歷史紀錄並渲染
+            caseHistory.unshift(generatedCase);
+            currentCaseIndex = 0;
+            updateHistoryUI();
+            renderCase(generatedCase);
+
+            // 新個案生成時自動折疊導師答案，保護考題不外洩
+            if (showAnswer) {
+                toggleInstructorPanel();
+            }
+        }
+
+        // 將個案資料渲染至畫面
+        function renderCase(c) {
+            document.getElementById("caseBadgeNumber").textContent = `個案 #${String(c.caseNumber).padStart(2, '0')}`;
+            document.getElementById("caseCategoryTag").textContent = c.categoryTag;
+            document.getElementById("caseDifficultyTag").textContent = c.difficultyTag;
+            document.getElementById("caseTimestamp").textContent = `生成時間：${c.timestamp}`;
+
+            document.getElementById("patientAvatar").textContent = c.avatarEmoji;
+            document.getElementById("patientDemographics").textContent = `${c.gender}，${c.age} 歲`;
+            document.getElementById("patientAgeGroup").textContent = c.ageGroupText;
+            document.getElementById("patientBuild").textContent = c.build;
+            document.getElementById("patientCompanion").textContent = c.companion;
+
+            document.getElementById("sceneLocation").textContent = c.location;
+            document.getElementById("sceneWeather").textContent = c.weather;
+            document.getElementById("sceneHazard").textContent = c.hazard;
+
+            document.getElementById("moiTag").textContent = c.moiTag;
+            document.getElementById("scenarioNarrative").textContent = c.narrative;
+
+            // 生命表徵
+            document.getElementById("vitalAVPU").textContent = c.vitals.avpu;
+            document.getElementById("vitalAVPUDesc").textContent = c.vitals.avpuDesc;
+            document.getElementById("vitalPulse").textContent = c.vitals.pulse;
+            document.getElementById("vitalPulseDesc").textContent = c.vitals.pulseDesc;
+            document.getElementById("vitalResp").textContent = c.vitals.resp;
+            document.getElementById("vitalRespDesc").textContent = c.vitals.respDesc;
+            document.getElementById("vitalBP").textContent = c.vitals.bp;
+            document.getElementById("vitalBPDesc").textContent = c.vitals.bpDesc;
+            document.getElementById("vitalSpO2").textContent = c.vitals.spo2;
+            document.getElementById("vitalSpO2Desc").textContent = c.vitals.spo2Desc;
+            document.getElementById("vitalSkinTemp").textContent = c.vitals.skinTemp;
+            document.getElementById("vitalPupils").textContent = c.vitals.pupils;
+
+            // 導師答案
+            document.getElementById("ansDiagnosis").textContent = c.answer.diagnosis;
+            document.getElementById("ansAnatomy").textContent = c.answer.anatomy;
+            document.getElementById("ansTreatment").innerHTML = c.answer.treatment.replace(/\n/g, "<br>");
+
+            // 評核清單
+            const checklistContainer = document.getElementById("checklistItems");
+            checklistContainer.innerHTML = "";
+            c.answer.checklist.forEach((item, idx) => {
+                const label = document.createElement("label");
+                label.className = "flex items-start gap-2.5 bg-slate-900/70 p-3 rounded-xl border border-slate-700/80 cursor-pointer hover:border-teal-500/60 transition";
+                label.innerHTML = `
+                    <input type="checkbox" onchange="updateChecklistScore()" class="mt-1 w-4 h-4 rounded text-teal-500 focus:ring-teal-500 bg-slate-800 border-slate-600">
+                    <span class="text-slate-200 text-xs sm:text-sm leading-snug">${idx + 1}. ${item}</span>
+                `;
+                checklistContainer.appendChild(label);
+            });
+            updateChecklistScore();
+            updateElapsedBadge();
+        }
+
+        // 更新評核勾選分數
+        function updateChecklistScore() {
+            const boxes = document.querySelectorAll("#checklistItems input[type='checkbox']");
+            const checked = Array.from(boxes).filter(b => b.checked).length;
+            document.getElementById("checklistScore").textContent = `已完成：${checked} / ${boxes.length} 項`;
+        }
+
+        // 切換正常成人參考值顯示
+        function toggleReferenceHints() {
+            showHints = !showHints;
+            const banner = document.getElementById("normalRefBanner");
+            const btnText = document.getElementById("hintBtnText");
+            if (showHints) {
+                banner.classList.remove("hidden");
+                btnText.textContent = "隱藏正常成人參考值";
+            } else {
+                banner.classList.add("hidden");
+                btnText.textContent = "顯示正常成人參考值";
+            }
+        }
+
+        // 切換導師專用答案面板
+        function toggleInstructorPanel() {
+            showAnswer = !showAnswer;
+            const body = document.getElementById("instructorAnswerBody");
+            const btnText = document.getElementById("answerBtnText");
+            const icon = document.getElementById("answerEyeIcon");
+            if (showAnswer) {
+                body.classList.remove("hidden");
+                btnText.textContent = "隱藏導師答案";
+                icon.textContent = "🙈";
+            } else {
+                body.classList.add("hidden");
+                btnText.textContent = "顯示導師答案與評核";
+                icon.textContent = "👁️‍🗨️";
+            }
+        }
+
+        // 複製個案文字至剪貼簿 (使用相容性最高的 execCommand)
+        function copyCaseToClipboard() {
+            if (currentCaseIndex < 0) return;
+            const c = caseHistory[currentCaseIndex];
+            const textToCopy = `【香港急救學模擬個案 #${String(c.caseNumber).padStart(2, '0')}】(${c.difficultyTag})
+👤 傷病者：${c.gender}，${c.age} 歲（${c.build}）
+📍 現場環境：${c.location}
+🌡️ 天氣狀況：${c.weather}
+💥 受傷機制/經過：${c.narrative}
+
+🩺 生命表徵 (Vital Signs)：
+• 清醒程度 (AVPU)：${c.vitals.avpu}（${c.vitals.avpuDesc}）
+• 脈搏 (Pulse)：${c.vitals.pulse}（${c.vitals.pulseDesc}）
+• 呼吸 (Resp)：${c.vitals.resp}（${c.vitals.respDesc}）
+• 血壓 (BP)：${c.vitals.bp}（${c.vitals.bpDesc}）
+• 血含氧量 (SpO2)：${c.vitals.spo2}（${c.vitals.spo2Desc}）
+• 體溫與皮膚：${c.vitals.skinTemp}
+• ${c.vitals.pupils}
+
+請學員根據以上情況進行現場評估及模擬急救處置！`;
+
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand("copy");
+                showToast("已複製個案情景文字，可直接貼上發送給學員！", "📋");
+            } catch (err) {
+                showToast("複製失敗，請手動選取文字複製", "⚠️");
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // =========================================================================
+        // 4. 歷史個案抽屜與參考總表 Modal 控制
+        // =========================================================================
+        function toggleHistoryDrawer() {
+            const drawer = document.getElementById("historyDrawer");
+            drawer.classList.toggle("hidden");
+        }
+
+        function updateHistoryUI() {
+            document.getElementById("historyCount").textContent = caseHistory.length;
+            const list = document.getElementById("historyList");
+            if (caseHistory.length === 0) return;
+
+            list.innerHTML = "";
+            caseHistory.forEach((item, idx) => {
+                const btn = document.createElement("button");
+                btn.className = `w-full text-left p-3.5 rounded-xl border transition ${idx === currentCaseIndex ? 'bg-teal-50 border-teal-500 shadow-xs' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`;
+                btn.onclick = () => {
+                    currentCaseIndex = idx;
+                    renderCase(item);
+                    updateHistoryUI();
+                    toggleHistoryDrawer();
+                };
+                btn.innerHTML = `
+                    <div class="flex items-center justify-between text-xs font-bold mb-1">
+                        <span class="text-teal-700">個案 #${String(item.caseNumber).padStart(2, '0')} • ${item.gender} ${item.age}歲</span>
+                        <span class="text-slate-400">${item.timestamp}</span>
+                    </div>
+                    <div class="text-sm font-bold text-slate-900 truncate">${item.answer.diagnosis}</div>
+                    <div class="text-xs text-slate-500 truncate mt-0.5">${item.location}</div>
+                `;
+                list.appendChild(btn);
+            });
+        }
+
+        function openReferenceModal() {
+            document.getElementById("referenceModal").classList.remove("hidden");
+            switchRefTab("vitals");
+        }
+
+        function closeReferenceModal() {
+            document.getElementById("referenceModal").classList.add("hidden");
+        }
+
+        function switchRefTab(tabName) {
+            const tabs = ["vitals", "moi", "anatomy"];
+            tabs.forEach(t => {
+                const el = document.getElementById("tab" + t.charAt(0).toUpperCase() + t.slice(1));
+                if (t === tabName) {
+                    el.classList.add("border-teal-600", "text-teal-700");
+                    el.classList.remove("border-transparent", "text-slate-500");
+                } else {
+                    el.classList.remove("border-teal-600", "text-teal-700");
+                    el.classList.add("border-transparent", "text-slate-500");
+                }
+            });
+
+            const container = document.getElementById("refModalContent");
+
+            if (tabName === "vitals") {
+                let html = `
+                    <div class="mb-4 bg-slate-100 p-3 rounded-xl text-xs text-slate-700 flex flex-wrap gap-4 font-semibold">
+                        <span>📌 正常成人基準：</span>
+                        <span>脈搏：60–100 次/分</span>
+                        <span>呼吸：12–20 次/分</span>
+                        <span>血壓：90–120 / 60–80 mmHg</span>
+                        <span>SpO₂：≥ 95%</span>
+                    </div>
+                    <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table class="min-w-full divide-y divide-slate-200 text-xs sm:text-sm">
+                            <thead class="bg-slate-800 text-white">
+                                <tr>
+                                    <th class="px-3 py-2.5 text-left font-bold">診斷 / 狀況</th>
+                                    <th class="px-3 py-2.5 text-left font-bold">AVPU</th>
+                                    <th class="px-3 py-2.5 text-left font-bold">脈搏 / 呼吸</th>
+                                    <th class="px-3 py-2.5 text-left font-bold">血壓 / SpO₂</th>
+                                    <th class="px-3 py-2.5 text-left font-bold">皮膚 / 瞳孔</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 bg-white">
+                `;
+                MEDICAL_CONDITIONS_DATA.forEach(c => {
+                    html += `
+                        <tr class="hover:bg-slate-50">
+                            <td class="px-3 py-3 font-bold text-slate-900">
+                                <span class="text-[11px] text-teal-600 block">${c.category}</span>
+                                ${c.name}
+                            </td>
+                            <td class="px-3 py-3 text-slate-700">${c.avpu}</td>
+                            <td class="px-3 py-3 text-slate-700">
+                                <div>💓 ${c.pulse}</div>
+                                <div class="mt-1">🫁 ${c.resp}</div>
+                            </td>
+                            <td class="px-3 py-3 text-slate-700">
+                                <div>🩸 ${c.bp}</div>
+                                <div class="mt-1">🫧 ${c.spo2}</div>
+                            </td>
+                            <td class="px-3 py-3 text-slate-700">
+                                <div>🌡️ ${c.skinTemp}</div>
+                                <div class="mt-1 text-xs text-slate-500">👁️ ${c.pupils}</div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                html += `</tbody></table></div>`;
+                container.innerHTML = html;
+            } else if (tabName === "moi") {
+                let html = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+                MOI_DATA.forEach(m => {
+                    html += `
+                        <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/70">
+                            <div class="font-bold text-base text-slate-900 mb-1">${m.type}</div>
+                            <p class="text-xs text-slate-600 mb-2">${m.desc}</p>
+                            <div class="text-xs font-semibold text-red-700 bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-100">
+                                常見傷勢：${m.injuries}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+                container.innerHTML = html;
+            } else if (tabName === "anatomy") {
+                let html = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+                ANATOMY_DATA.forEach(reg => {
+                    html += `
+                        <div class="border border-slate-200 rounded-xl overflow-hidden">
+                            <div class="bg-slate-800 text-white font-bold px-4 py-2.5 text-sm">${reg.region}</div>
+                            <div class="p-4 space-y-2.5 bg-white">
+                                ${reg.parts.map(p => `
+                                    <div class="border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                                        <span class="font-bold text-slate-800 text-xs sm:text-sm">${p.name}：</span>
+                                        <span class="text-slate-600 text-xs sm:text-sm">${p.detail}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+                container.innerHTML = html;
+            }
+        }
+    </script>
+</body>
+</html>
